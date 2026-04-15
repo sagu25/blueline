@@ -1,0 +1,37 @@
+# ── Secrets — NEVER commit these ──
+.env
+*.env
+.env.local
+.env.production
+
+# ── Python ──
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# ── Streamlit ──
+.streamlit/
+
+# ── Images (raw photos from phone — not needed in repo) ──
+IMG_*.jpg
+IMG_*.jpeg
+IMG_*.png
+
+# ── OS files ──
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── IDE ──
+.vscode/
+.idea/
+*.suo
+*.user
