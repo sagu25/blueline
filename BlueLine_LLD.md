@@ -36,6 +36,15 @@
 13. [Security Design](#13-security-design)
 14. [Configuration & Environment Variables](#14-configuration--environment-variables)
 15. [Deployment Topology](#15-deployment-topology)
+16. [Durable Functions Orchestrator Design](#16-durable-functions-orchestrator-design)
+17. [ASCENT Feedback Loop — Detailed Design](#17-ascent-feedback-loop--detailed-design)
+18. [VECTOR Agent — Implementation Detail](#18-vector-agent--implementation-detail)
+19. [FORGE — Multi-File Fix Handling](#19-forge--multi-file-fix-handling)
+20. [HARBOUR — Azure App Service Certificate Deployment](#20-harbour--azure-app-service-certificate-deployment)
+21. [PR Comment Format — ASCENT Output Example](#21-pr-comment-format--ascent-output-example)
+22. [Testing Strategy](#22-testing-strategy)
+23. [Cost Estimation](#23-cost-estimation)
+24. [Monitoring & Alerting Design](#24-monitoring--alerting-design)
 
 ---
 
@@ -1440,4 +1449,969 @@ blueline/
 
 ---
 
-*End of Low Level Design Document — Version 1.0*
+## 16. Durable Functions Orchestrator Design
+
+The Quality Gate and Certificate Loop use **Azure Durable Functions** for stateful, multi-step orchestration. This section shows the actual orchestrator code for both tracks.
+
+### 16.1 Quality Gate Orchestrator
+
+CLARION, LUMEN, and VECTOR run in **parallel** (fan-out). ASCENT waits for all three to finish before aggregating (fan-in). This is the core pattern.
+
+```python
+# quality_gate/orchestrator.py
+import azure.durable_functions as df
+
+def orchestrator_function(context: df.DurableOrchestrationContext):
+    pr_payload = context.get_input()
+
+    # Step 1: Fan-out — run CLARION, LUMEN, VECTOR in parallel
+    parallel_tasks = [
+        context.call_activity("run_clarion", pr_payload),
+        context.call_activity("run_lumen",   pr_payload),
+        context.call_activity("run_vector",  pr_payload),
+    ]
+    # Wait for ALL three to complete before continuing
+    results = yield context.task_all(parallel_tasks)
+
+    clarion_result = results[0]
+    lumen_result   = results[1]
+    vector_result  = results[2]
+
+    # Step 2: Fan-in — ASCENT aggregates and posts to PR
+    ascent_input = {
+        "pr_id":          pr_payload["pr_id"],
+        "clarion_result": clarion_result,
+        "lumen_result":   lumen_result,
+        "vector_result":  vector_result,
+    }
+    ascent_result = yield context.call_activity("run_ascent", ascent_input)
+
+    return {
+        "pr_id":        pr_payload["pr_id"],
+        "status":       "completed",
+        "comment_url":  ascent_result["comment_url"],
+        "risk_level":   vector_result["overall_risk_level"],
+        "violations":   len(clarion_result["violations"]),
+        "smells":       len(lumen_result["smells"]),
+    }
+
+main = df.Orchestrator.create(orchestrator_function)
+```
+
+**Activity function wrappers** (each one instantiates and runs the agent):
+
+```python
+# function_app.py — activity bindings
+
+@app.activity_trigger(input_name="payload")
+async def run_clarion(payload: dict) -> dict:
+    ctx = AgentContext(run_id=payload["run_id"], agent_name="CLARION", ...)
+    result = await ClarionAgent(ctx).execute()
+    return result.output
+
+@app.activity_trigger(input_name="payload")
+async def run_lumen(payload: dict) -> dict:
+    ctx = AgentContext(run_id=payload["run_id"], agent_name="LUMEN", ...)
+    result = await LumenAgent(ctx).execute()
+    return result.output
+
+@app.activity_trigger(input_name="payload")
+async def run_vector(payload: dict) -> dict:
+    ctx = AgentContext(run_id=payload["run_id"], agent_name="VECTOR", ...)
+    result = await VectorAgent(ctx).execute()
+    return result.output
+
+@app.activity_trigger(input_name="payload")
+async def run_ascent(payload: dict) -> dict:
+    ctx = AgentContext(run_id=payload["run_id"], agent_name="ASCENT", ...)
+    result = await AscentAgent(ctx, payload).execute()
+    return result.output
+```
+
+**Execution timeline:**
+
+```
+T+0s   PR webhook arrives → Orchestrator starts
+T+0s   CLARION starts ──┐
+T+0s   LUMEN starts   ──┤  (all three in parallel)
+T+0s   VECTOR starts  ──┘
+T+45s  All three complete (slowest one determines wait)
+T+45s  ASCENT starts → aggregates → posts PR comment
+T+60s  Orchestrator completes
+```
+
+### 16.2 Certificate Loop Orchestrator
+
+The Certificate Loop is **sequential** — each agent depends on the previous one's output.
+
+```python
+# cert_loop/orchestrator.py
+import azure.durable_functions as df
+
+def cert_loop_orchestrator(context: df.DurableOrchestrationContext):
+
+    # Step 1: TIMELINE — find all expiring certs
+    expiring_certs = yield context.call_activity("run_timeline", {})
+
+    if not expiring_certs:
+        return {"status": "no_renewals_needed"}
+
+    renewal_results = []
+
+    # Step 2: Process each expiring cert independently
+    for cert in expiring_certs:
+
+        # Step 2a: REGENT — update inventory, identify owner + CA
+        cert_record = yield context.call_activity("run_regent", cert)
+
+        # Step 2b: COURIER — request + download new cert from CA
+        cert_bundle = yield context.call_activity("run_courier", cert_record)
+
+        if cert_bundle["status"] != "issued":
+            # CA issuance failed — escalate to human
+            yield context.call_activity("notify_escalation", {
+                "cert": cert_record,
+                "reason": cert_bundle["error"]
+            })
+            continue
+
+        # Step 2c: HARBOUR — deploy to Dev, then QA
+        dev_result = yield context.call_activity("harbour_deploy", {
+            "bundle": cert_bundle, "record": cert_record, "env": "dev"
+        })
+        qa_result = yield context.call_activity("harbour_deploy", {
+            "bundle": cert_bundle, "record": cert_record, "env": "qa"
+        })
+
+        # Step 2d: Human approval gate for Prod
+        if not cert_record.get("auto_deploy_prod"):
+            approval_id = yield context.call_activity("send_prod_approval_request", {
+                "bundle": cert_bundle, "record": cert_record
+            })
+            # Pause orchestrator — wait for human callback (up to 24 hours)
+            approval_event = context.wait_for_external_event("prod_approval")
+            approved = yield context.create_timer(
+                context.current_utc_datetime + timedelta(hours=24)
+            ) if False else (yield approval_event)
+
+            if not approved:
+                yield context.call_activity("notify_timeout", cert_record)
+                continue
+
+        # Step 2e: HARBOUR — deploy to Prod
+        prod_result = yield context.call_activity("harbour_deploy", {
+            "bundle": cert_bundle, "record": cert_record, "env": "prod"
+        })
+
+        renewal_results.append({
+            "cert": cert_record["subject"],
+            "dev": dev_result["https_verified"],
+            "qa":  qa_result["https_verified"],
+            "prod": prod_result["https_verified"],
+        })
+
+    return {"status": "completed", "renewals": renewal_results}
+
+main = df.Orchestrator.create(cert_loop_orchestrator)
+```
+
+---
+
+## 17. ASCENT Feedback Loop — Detailed Design
+
+ASCENT is the only agent that **learns over time**. This section designs the full feedback storage, collection, analysis, and rules-update cycle.
+
+### 17.1 Feedback Storage Schema
+
+**Azure Table: `AscentFeedback`**
+
+| Column | Type | Description |
+|---|---|---|
+| PartitionKey | string | `rule_id` — e.g., `DOTNET-SEC-001` |
+| RowKey | string | `comment_id` from Azure DevOps |
+| RunId | string | The AgentRun that generated this comment |
+| PRId | int | PR the comment was posted on |
+| ReviewerId | string | Azure DevOps user ID who reacted |
+| Reaction | string | `thumbs_up` or `thumbs_down` |
+| AgentName | string | `CLARION` or `LUMEN` |
+| RecordedAt | datetime | UTC timestamp |
+
+**Azure Table: `AscentRuleStats`** — aggregated false positive rates per rule
+
+| Column | Type | Description |
+|---|---|---|
+| PartitionKey | string | `agent_name` — `CLARION` or `LUMEN` |
+| RowKey | string | `rule_id` |
+| TotalFired | int | Total times this rule produced a comment |
+| ThumbsUp | int | Reviewer agreed with the comment |
+| ThumbsDown | int | Reviewer disagreed (false positive signal) |
+| FalsePositiveRate | float | ThumbsDown / TotalFired |
+| LastUpdated | datetime | Last time stats were recalculated |
+| Status | string | `active` / `flagged` / `suppressed` |
+
+### 17.2 Feedback Collection Flow
+
+ASCENT runs a **daily batch job** (Azure Timer, 23:00 UTC) to collect reactions:
+
+```python
+# quality_gate/ascent.py  — feedback collection
+
+async def collect_daily_feedback(self):
+    """
+    Queries Azure DevOps for all reactions posted on BlueLine
+    bot comments in the last 24 hours.
+    """
+    # Fetch all PRs updated in last 24 hours
+    prs = await self.devops.get_recently_updated_prs(hours=24)
+
+    for pr in prs:
+        # Get all threads on this PR
+        threads = await self.devops.get_pr_threads(pr.id)
+
+        for thread in threads:
+            # Only process threads started by the BlueLine bot account
+            if not self._is_blueline_comment(thread):
+                continue
+
+            rule_id = thread.properties.get("blueline_rule_id")
+            if not rule_id:
+                continue
+
+            # Get reactions on the root comment
+            reactions = await self.devops.get_comment_reactions(
+                pr.id, thread.id, thread.comments[0].id
+            )
+
+            for reaction in reactions:
+                feedback = FeedbackRecord(
+                    run_id=thread.properties["blueline_run_id"],
+                    rule_id=rule_id,
+                    reaction=self._map_reaction(reaction.type),  # thumbs_up / thumbs_down
+                    reviewer_id=reaction.created_by.id,
+                    comment_id=str(thread.id),
+                    recorded_at=datetime.now(timezone.utc)
+                )
+                await self.storage.upsert_feedback(feedback)
+
+    # Recalculate rule stats after collecting
+    await self._recalculate_rule_stats()
+```
+
+### 17.3 False Positive Rate Calculation
+
+```python
+async def _recalculate_rule_stats(self):
+    """
+    Recalculates false positive rate for each rule.
+    Flags rules exceeding the threshold for engineering review.
+    """
+    FLAGGING_THRESHOLD = 0.20   # 20% false positive rate triggers review
+
+    all_feedback = await self.storage.get_all_feedback()
+
+    # Group by rule_id
+    by_rule = {}
+    for f in all_feedback:
+        by_rule.setdefault(f.rule_id, []).append(f)
+
+    for rule_id, feedbacks in by_rule.items():
+        total      = len(feedbacks)
+        thumbs_up   = sum(1 for f in feedbacks if f.reaction == "thumbs_up")
+        thumbs_down = sum(1 for f in feedbacks if f.reaction == "thumbs_down")
+        fp_rate     = thumbs_down / total if total > 0 else 0.0
+
+        status = "active"
+        if fp_rate > FLAGGING_THRESHOLD and total >= 10:
+            # Only flag if we have enough data (>=10 reactions)
+            status = "flagged"
+            await self.notifier.alert_engineering_lead(
+                f"Rule {rule_id} has {fp_rate:.0%} false positive rate "
+                f"across {total} reactions — review recommended"
+            )
+
+        await self.storage.upsert_rule_stat(RuleStat(
+            rule_id=rule_id,
+            total_fired=total,
+            thumbs_up=thumbs_up,
+            thumbs_down=thumbs_down,
+            false_positive_rate=fp_rate,
+            status=status,
+            last_updated=datetime.now(timezone.utc)
+        ))
+```
+
+### 17.4 Rule Reload Mechanism
+
+CLARION and LUMEN reload rules at the **start of each agent run** — not on a schedule. This means:
+- Engineering lead updates the standards document in Azure Blob Storage
+- Next PR that is opened automatically picks up the updated rules
+- No restart or redeployment needed
+
+```python
+# quality_gate/clarion.py
+
+async def _load_standards(self) -> str:
+    """
+    Loads the coding standards document from Azure Blob Storage.
+    Also loads current rule suppression list (rules with status='suppressed').
+    """
+    # Load standards document
+    standards_text = await self.blob_client.download_text(
+        container="blueline-config",
+        blob="coding-standards.md"
+    )
+
+    # Load suppressed rules from ASCENT stats
+    suppressed = await self.storage.get_rules_by_status("suppressed")
+    suppressed_ids = [r.rule_id for r in suppressed]
+
+    if suppressed_ids:
+        standards_text += f"\n\nDO NOT flag these rule IDs — they are suppressed: {suppressed_ids}"
+
+    return standards_text
+```
+
+---
+
+## 18. VECTOR Agent — Implementation Detail
+
+VECTOR uses two data sources: **static analysis of the diff** (for complexity) and **git history** (for churn). This section shows how both are computed.
+
+### 18.1 Cyclomatic Complexity Calculation
+
+VECTOR parses the diff and counts decision points (if, for, while, catch, case, &&, ||) to approximate complexity without running a full static analysis tool:
+
+```python
+# quality_gate/vector.py
+
+import re
+
+DECISION_KEYWORDS_CSHARP = [
+    r'\bif\b', r'\belse if\b', r'\bfor\b', r'\bforeach\b',
+    r'\bwhile\b', r'\bcase\b', r'\bcatch\b', r'\b&&\b', r'\b\|\|\b',
+    r'\?\s*\w'  # ternary operator
+]
+
+DECISION_KEYWORDS_TYPESCRIPT = [
+    r'\bif\b', r'\belse if\b', r'\bfor\b', r'\bforEach\b',
+    r'\bwhile\b', r'\bcase\b', r'\bcatch\b', r'\b&&\b', r'\b\|\|\b',
+    r'\?\?', r'\?\.'   # nullish coalescing, optional chaining
+]
+
+def calculate_cyclomatic_complexity(file_content: str, language: str) -> int:
+    """
+    Approximates cyclomatic complexity by counting decision points.
+    Baseline complexity = 1, +1 per decision point found.
+    """
+    keywords = (DECISION_KEYWORDS_CSHARP if language == "csharp"
+                else DECISION_KEYWORDS_TYPESCRIPT)
+    complexity = 1  # baseline
+    for pattern in keywords:
+        complexity += len(re.findall(pattern, file_content))
+    return complexity
+```
+
+### 18.2 Churn Rate from Git History
+
+```python
+async def get_file_churn(self, file_path: str, days: int = 30) -> int:
+    """
+    Queries Azure DevOps API for commit count on a file in the last N days.
+    High churn = frequently changing file = higher risk.
+    """
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+
+    commits = await self.devops.get_commits_for_file(
+        file_path=file_path,
+        from_date=since
+    )
+    return len(commits)
+```
+
+### 18.3 Full Risk Score Computation
+
+```python
+async def score_file(self, file_path: str, file_content: str, language: str) -> FileRisk:
+    complexity   = calculate_cyclomatic_complexity(file_content, language)
+    churn        = await self.get_file_churn(file_path, days=30)
+    fan_out      = self._count_imports(file_content)
+    test_cov     = await self._get_test_coverage(file_path)  # 0-100, None if unknown
+
+    c_score  = min(complexity / 10, 1.0)
+    ch_score = min(churn / 20, 1.0)
+    d_score  = min(fan_out / 15, 1.0)
+    t_score  = 1.0 - ((test_cov or 50) / 100)   # assume 50% if unknown
+
+    risk = (c_score * 0.35) + (ch_score * 0.25) + (d_score * 0.20) + (t_score * 0.20)
+    risk = round(min(risk, 1.0), 3)
+
+    level = (
+        "CRITICAL" if risk >= 0.8 else
+        "HIGH"     if risk >= 0.6 else
+        "MEDIUM"   if risk >= 0.3 else
+        "LOW"
+    )
+
+    return FileRisk(
+        file_path=file_path,
+        risk_score=risk,
+        risk_level=level,
+        complexity_score=c_score,
+        churn_score=ch_score,
+        dependency_score=d_score,
+        test_coverage_score=t_score,
+        reviewer_note=self._build_reviewer_note(level, complexity, churn, fan_out)
+    )
+
+def _build_reviewer_note(self, level, complexity, churn, fan_out) -> str:
+    notes = []
+    if complexity > 15: notes.append(f"high cyclomatic complexity ({complexity})")
+    if churn > 10:      notes.append(f"changed {churn} times in 30 days")
+    if fan_out > 10:    notes.append(f"{fan_out} dependencies")
+    return f"{level} risk — " + ", ".join(notes) if notes else f"{level} risk"
+```
+
+---
+
+## 19. FORGE — Multi-File Fix Handling
+
+Real vulnerabilities often span more than one file (e.g., a vulnerable helper method called from multiple controllers). This section covers how FORGE handles that.
+
+### 19.1 Fix Scope Classification
+
+Before generating a fix, FORGE classifies whether the fix is **single-file** or **multi-file**:
+
+```python
+async def classify_fix_scope(self, finding: TriagedFinding) -> str:
+    """
+    Asks the LLM to determine if the fix requires changes to one file or multiple.
+    Returns: "single_file" | "multi_file" | "architectural"
+    """
+    prompt = f"""
+    Given this vulnerability in {finding.finding.file_path} at line {finding.finding.line_number}:
+    {finding.vulnerable_code_path}
+
+    Classify the fix scope:
+    - single_file: Fix is contained entirely within {finding.finding.file_path}
+    - multi_file: Fix requires changes to 2-5 files (e.g., interface + implementation)
+    - architectural: Fix requires design changes across many files — cannot be auto-generated
+
+    Respond with only one of: single_file, multi_file, architectural
+    """
+    scope = (await self.llm.complete(prompt)).strip()
+    return scope
+```
+
+### 19.2 Multi-File Fix Strategy
+
+```python
+async def generate_multi_file_fix(self, finding: TriagedFinding) -> ForgeFixResult:
+    """
+    For multi-file fixes: identify all affected files, generate fix for each,
+    commit all changes in a single branch.
+    """
+    # Step 1: Ask LLM to list all files that need changing
+    affected_files = await self._identify_affected_files(finding)
+
+    if len(affected_files) > 5:
+        # Too broad — escalate to human
+        return ForgeFixResult(
+            finding_id=finding.finding.issue_id,
+            status="needs_human",
+            fix_explanation=f"Fix spans {len(affected_files)} files — requires human architect review",
+            files_modified=affected_files
+        )
+
+    # Step 2: Fetch content of all affected files
+    file_contents = {}
+    for fp in affected_files:
+        file_contents[fp] = await self.devops.get_file_content(fp)
+
+    # Step 3: Generate fix for each file in one LLM call
+    # (passing all file contents as context)
+    fixes = await self._generate_fixes_for_all_files(finding, file_contents)
+
+    # Step 4: Create single PR with all file changes
+    return ForgeFixResult(
+        finding_id=finding.finding.issue_id,
+        status="fix_generated",
+        files_modified=list(fixes.keys()),
+        fixed_code=fixes,   # dict: file_path → new_content
+        fix_explanation=f"Multi-file fix across {len(fixes)} files",
+        pr_title=f"[Security Fix] {finding.finding.category} — {len(fixes)} files",
+        pr_description=self._build_pr_description(finding, fixes)
+    )
+```
+
+---
+
+## 20. HARBOUR — Azure App Service Certificate Deployment
+
+The existing HARBOUR design covers IIS (WinRM). This section adds the **Azure App Service** deployment path, which uses the Azure SDK — not PowerShell.
+
+### 20.1 App Service Deployment
+
+```python
+# cert_loop/harbour.py  — App Service path
+
+from azure.mgmt.web import WebSiteManagementClient
+from azure.identity import DefaultAzureCredential
+
+async def deploy_to_app_service(
+    self,
+    bundle: CertBundle,
+    subscription_id: str,
+    resource_group: str,
+    app_name: str,
+    slot: str = "production"
+) -> DeployResult:
+
+    credential = DefaultAzureCredential()
+    client = WebSiteManagementClient(credential, subscription_id)
+
+    # Step 1: Upload certificate to App Service
+    cert_response = client.certificates.create_or_update(
+        resource_group_name=resource_group,
+        name=f"blueline-{bundle.thumbprint[:8]}",
+        certificate_envelope={
+            "location": self.azure_region,
+            "properties": {
+                "pfxBlob": bundle.certificate_pfx_b64,
+                "password": bundle.pfx_password,
+            }
+        }
+    )
+
+    # Step 2: Bind to custom domain SSL
+    app = client.web_apps.get(resource_group, app_name)
+    for hostname_binding in app.host_name_ssl_states:
+        if hostname_binding.ssl_state in ("SniEnabled", "IpBasedEnabled"):
+            client.web_apps.create_or_update_host_name_binding(
+                resource_group_name=resource_group,
+                name=app_name,
+                host_name=hostname_binding.name,
+                host_name_binding={
+                    "ssl_state": "SniEnabled",
+                    "thumbprint": bundle.thumbprint
+                }
+            )
+            self.log_action(f"Bound cert {bundle.thumbprint[:8]} to {hostname_binding.name}")
+
+    # Step 3: Verify HTTPS
+    https_ok = await self._verify_https(app_name + ".azurewebsites.net", [])
+
+    return DeployResult(
+        environment=slot,
+        server=f"{app_name}.azurewebsites.net",
+        sites=[app_name],
+        thumbprint=bundle.thumbprint,
+        https_verified=https_ok
+    )
+```
+
+### 20.2 Deployment Target Router
+
+HARBOUR automatically chooses the right deployment path based on the environment record:
+
+```python
+async def deploy(self, bundle: CertBundle, record: CertificateRecord, env: str) -> DeployResult:
+    target = record.environments[env]
+
+    if target["type"] == "iis":
+        return await self.deploy_to_iis(
+            bundle=bundle,
+            server=target["server"],
+            site_bindings=record.iis_site_bindings[env],
+            environment=env
+        )
+    elif target["type"] == "app_service":
+        return await self.deploy_to_app_service(
+            bundle=bundle,
+            subscription_id=target["subscription_id"],
+            resource_group=target["resource_group"],
+            app_name=target["app_name"],
+            slot=target.get("slot", "production")
+        )
+    else:
+        raise ValueError(f"Unknown deployment target type: {target['type']}")
+```
+
+---
+
+## 21. PR Comment Format — ASCENT Output Example
+
+This section shows exactly what a developer sees on their PR after ASCENT posts the consolidated review.
+
+### 21.1 Sample ASCENT PR Comment
+
+```markdown
+## 🔵 BlueLine Code Review — PR #1234
+
+**Risk Level:** 🔴 HIGH  
+**Files Reviewed:** 6  |  **Critical Files:** 2  |  **Review Time:** 48 seconds
+
+---
+
+### ⛔ Must Fix Before Merge (3 issues)
+
+| File | Line | Rule | Issue |
+|---|---|---|---|
+| `Services/PaymentService.cs` | 47 | DOTNET-SEC-001 | SQL string concatenation — SQL injection risk |
+| `Services/PaymentService.cs` | 12 | DOTNET-SEC-003 | Hardcoded connection string with password |
+| `Controllers/UserController.cs` | 89 | DOTNET-SEC-002 | User input passed to file path without sanitization |
+
+---
+
+### ⚠️ Should Fix (2 issues)
+
+| File | Issue |
+|---|---|
+| `Services/PaymentService.cs` | Long Parameter List — `ProcessPayment` takes 8 parameters. Extract to `PaymentRequest` object. |
+| `Services/PaymentService.cs` | Duplicate Code — `ProcessPayment` and `ProcessRefund` share identical DB query logic. Extract to private method. |
+
+---
+
+### 🔴 High-Risk Files — Review Carefully
+
+| File | Risk Score | Reason |
+|---|---|---|
+| `Services/PaymentService.cs` | 0.87 — CRITICAL | High complexity (18), changed 14× in 30 days, 0% test coverage |
+| `Repositories/OrderRepository.cs` | 0.71 — HIGH | 12 dependencies, changed 8× in 30 days |
+
+---
+
+### ✅ Reviewer Checklist
+
+Before approving, confirm:
+- [ ] SQL injection fix uses parameterized queries (not just escaping)
+- [ ] Connection string moved to Key Vault reference — not just environment variable
+- [ ] File path fix validates against allowed root directory
+- [ ] `PaymentService` has unit test coverage added with this PR
+
+---
+
+<sub>🤖 BlueLine AI Review — CLARION v1.0 · LUMEN v1.0 · VECTOR v1.0 · Confidence: 91%
+React 👍 if this comment is correct · React 👎 if this is a false positive</sub>
+```
+
+### 21.2 Inline Comment Format (Individual Violations)
+
+Each violation also appears as a separate inline comment on the exact diff line:
+
+```markdown
+**[CLARION · DOTNET-SEC-001 · ERROR]**
+
+⛔ **SQL Injection Risk** — User input is concatenated directly into a SQL query string.
+
+**Vulnerable code:**
+```csharp
+string query = "SELECT * FROM Users WHERE Id = '" + userId + "'";
+```
+
+**Fix:**
+```csharp
+string query = "SELECT * FROM Users WHERE Id = @userId";
+var cmd = new SqlCommand(query, connection);
+cmd.Parameters.AddWithValue("@userId", userId);
+```
+
+**Why this matters:** An attacker can pass `' OR '1'='1` as the userId to
+bypass authentication and access all user records.
+
+<sub>Confidence: 96% · React 👍 agree · 👎 false positive</sub>
+```
+
+---
+
+## 22. Testing Strategy
+
+### 22.1 Testing Approach by Layer
+
+| Layer | Test Type | Tool | What is Tested |
+|---|---|---|---|
+| Agent logic (no LLM) | Unit tests | pytest | Prompt construction, output parsing, routing logic |
+| Agent + real LLM | Integration tests | pytest + live API | End-to-end agent response quality |
+| Full track | E2E tests | pytest + Azure DevOps sandbox | Webhook → agents → PR comment posted |
+| Infrastructure | IaC validation | Bicep linter + checkov | Security and config correctness |
+
+### 22.2 Unit Testing Agents Without Calling the LLM
+
+Agents are designed to be testable without real LLM calls by injecting a mock LLM client:
+
+```python
+# tests/test_clarion.py
+import pytest
+from unittest.mock import AsyncMock, patch
+from quality_gate.clarion import ClarionAgent
+from core.base_agent import AgentContext
+
+SAMPLE_DIFF = """
++public class paymentservice {
++    private string conn = "Server=db;Password=Admin@123;";
++    public void Process(string userId) {
++        string q = "SELECT * FROM Users WHERE Id = '" + userId + "'";
++    }
++}
+"""
+
+MOCK_LLM_RESPONSE = """{
+  "summary": "Multiple critical violations found",
+  "overall_score": 2,
+  "violations": [
+    {
+      "line": 1, "severity": "error", "rule": "DOTNET-N-001",
+      "message": "Class name must be PascalCase",
+      "fix": "Rename to PaymentService", "confidence": 0.98
+    },
+    {
+      "line": 2, "severity": "error", "rule": "DOTNET-SEC-003",
+      "message": "Hardcoded password in connection string",
+      "fix": "Use Azure Key Vault reference", "confidence": 0.99
+    }
+  ]
+}"""
+
+@pytest.mark.asyncio
+async def test_clarion_detects_violations():
+    ctx = AgentContext(
+        run_id="test-001",
+        trigger_type="pr_event",
+        trigger_payload={"pr_id": 1, "diff": SAMPLE_DIFF},
+        agent_name="CLARION",
+        track="quality_gate"
+    )
+
+    with patch.object(ClarionAgent, "call_llm", return_value=MOCK_LLM_RESPONSE):
+        agent = ClarionAgent(ctx)
+        result = await agent.execute()
+
+    assert result.status == "success"
+    assert len(result.output["violations"]) == 2
+    assert result.output["violations"][0]["rule"] == "DOTNET-N-001"
+    assert result.output["overall_score"] == 2
+
+
+@pytest.mark.asyncio
+async def test_clarion_clean_code_returns_no_violations():
+    clean_diff = """
++public class PaymentService : IPaymentService {
++    private readonly IConfiguration _config;
++    public async Task<Result> ProcessAsync(PaymentRequest request) {
++        var connStr = _config["ConnectionStrings:Payments"];
++        return await _processor.RunAsync(request);
++    }
++}"""
+
+    ctx = AgentContext(run_id="test-002", trigger_type="pr_event",
+                       trigger_payload={"pr_id": 2, "diff": clean_diff},
+                       agent_name="CLARION", track="quality_gate")
+
+    CLEAN_RESPONSE = '{"summary": "Code follows all standards", "overall_score": 9, "violations": []}'
+
+    with patch.object(ClarionAgent, "call_llm", return_value=CLEAN_RESPONSE):
+        agent = ClarionAgent(ctx)
+        result = await agent.execute()
+
+    assert result.status == "success"
+    assert result.output["violations"] == []
+    assert result.output["overall_score"] >= 8
+```
+
+### 22.3 Integration Test — Full Security Loop
+
+```python
+# tests/integration/test_security_loop.py
+
+@pytest.mark.integration   # only runs when --integration flag is passed
+@pytest.mark.asyncio
+async def test_bulwark_classifies_sql_injection_as_critical():
+    """
+    Calls the real LLM API with a known SQL injection finding.
+    Asserts it is classified as CRITICAL with >= 85% confidence.
+    """
+    finding = FortifyFinding(
+        issue_id="TEST-001",
+        category="SQL Injection",
+        severity="Critical",
+        file_path="Services/UserService.cs",
+        line_number=34,
+        source_code_snippet='string q = "SELECT * FROM Users WHERE Id = \'" + userId + "\'";',
+        rule_id="sql-injection",
+        project="TestProject",
+        project_version="1.0"
+    )
+
+    ctx = AgentContext(run_id="int-test-001", trigger_type="pipeline",
+                       trigger_payload={}, agent_name="BULWARK", track="security")
+
+    result = await BulwarkAgent(ctx).triage([finding])
+
+    triaged = result.output["triaged_findings"][0]
+    assert triaged["classification"] == "CRITICAL"
+    assert triaged["confidence"] >= 0.85
+    assert "sql" in triaged["owasp_category"].lower()
+```
+
+### 22.4 Test Coverage Targets
+
+| Component | Target Coverage | Priority |
+|---|---|---|
+| Agent output parsers | 100% | Critical — any parsing failure breaks the track |
+| Routing logic (BULWARK classification → FORGE/STEWARD) | 100% | Critical |
+| Risk scoring formula (VECTOR) | 100% | High |
+| ASCENT aggregation logic | 90% | High |
+| HARBOUR rollback path | 90% | Critical — must verify rollback works before going live |
+| COURIER CA factory | 80% | High |
+| Feedback collection (ASCENT) | 80% | Medium |
+
+### 22.5 Shadow Mode Testing (Pre-Production)
+
+Before agents post real comments or take real actions, run in **shadow mode**:
+
+```python
+# Set in .env / App Configuration
+BLUELINE_ENV=shadow   # "shadow" | "production"
+```
+
+In shadow mode:
+- All agent logic runs normally
+- All LLM calls are made
+- **No external actions are taken** — no PR comments posted, no certs deployed, no Fortify suppressions added
+- All outputs are written to `shadow-output` Azure Blob container for human review
+
+```python
+# core/base_agent.py
+
+async def take_action(self, action_fn, action_description: str):
+    """
+    Wrapper for all external actions. In shadow mode, logs but does not execute.
+    """
+    if os.getenv("BLUELINE_ENV") == "shadow":
+        self.logger.info(f"[SHADOW] Would have taken action: {action_description}")
+        self.log_action(f"[SHADOW] {action_description}")
+        return None
+    else:
+        self.log_action(action_description)
+        return await action_fn()
+```
+
+---
+
+## 23. Cost Estimation
+
+### 23.1 Token Usage Per Operation
+
+| Operation | Agent(s) | Input Tokens (est.) | Output Tokens (est.) | Total Tokens |
+|---|---|---|---|---|
+| PR review — small PR (50 lines changed) | CLARION + LUMEN | ~8,000 | ~1,500 | ~9,500 |
+| PR review — medium PR (200 lines changed) | CLARION + LUMEN + VECTOR | ~20,000 | ~2,500 | ~22,500 |
+| PR review — large PR (500+ lines changed) | CLARION + LUMEN + VECTOR | ~45,000 | ~3,500 | ~48,500 |
+| Security triage — single finding | BULWARK | ~3,000 | ~800 | ~3,800 |
+| Security fix generation | FORGE | ~8,000 | ~2,000 | ~10,000 |
+| Certificate analysis — single cert | TIMELINE | ~1,000 | ~500 | ~1,500 |
+
+> Note: Input tokens are significantly cheaper than output tokens. Prompt caching reduces input token cost by ~90% on repeated calls with the same system prompt (coding standards document).
+
+### 23.2 Monthly Cost Estimate — Azure OpenAI (GPT-4o)
+
+**Assumptions:**
+- 30 PRs per day (team activity estimate)
+- 60% small, 30% medium, 10% large PRs
+- 50 new Fortify findings per week
+- 5 certificates renewed per month
+- GPT-4o pricing: ~$2.50 / 1M input tokens, ~$10.00 / 1M output tokens
+
+| Track | Volume / Month | Tokens / Month | Estimated Cost |
+|---|---|---|---|
+| Quality Gate (PRs) | ~900 PRs | ~18M input, ~2M output | ~$65 |
+| Security Loop (findings) | ~200 findings | ~0.8M input, ~0.2M output | ~$4 |
+| Certificate Loop (renewals) | ~5 renewals | ~0.1M input, ~0.05M output | <$1 |
+| **Total** | | **~19M input, ~2.3M output** | **~$70/month** |
+
+> With prompt caching applied to the system prompts (coding standards + security rules), input token cost drops by ~60%, bringing the estimate to approximately **$40–50/month**.
+
+### 23.3 Azure Infrastructure Cost Estimate
+
+| Resource | SKU | Estimated Monthly Cost |
+|---|---|---|
+| Quality Gate Function App | Premium EP1 (always-on) | ~$140 |
+| Security Function App | Consumption | ~$5 |
+| Cert Loop Function App | Consumption | ~$2 |
+| Azure Service Bus | Standard tier | ~$10 |
+| Azure Storage (blobs + tables) | LRS | ~$5 |
+| Azure Key Vault | Standard | ~$5 |
+| Azure API Management | Consumption tier | ~$3.50 |
+| Log Analytics Workspace | Pay-per-GB (~5GB/mo) | ~$12 |
+| **Total Infrastructure** | | **~$183/month** |
+
+### 23.4 Total Cost of Ownership
+
+| Period | AI Tokens | Infrastructure | Total |
+|---|---|---|---|
+| Monthly | ~$45 | ~$183 | **~$228** |
+| Annual | ~$540 | ~$2,196 | **~$2,736** |
+
+**ROI context:** If the Quality Gate saves each developer 2 hours of review work per week across a 10-person team, that is 1,040 hours/year recovered. At a blended rate of $80/hour, that is **$83,200/year in recovered developer time** against a **$2,736/year operating cost**.
+
+---
+
+## 24. Monitoring & Alerting Design
+
+### 24.1 Azure Monitor Alert Rules
+
+| Alert Name | Condition | Severity | Notification |
+|---|---|---|---|
+| PR Review Timeout | Quality Gate Function > 5 min execution | P2 | Teams + Email |
+| Agent Failure Rate | >5% of agent runs fail in 1 hour | P1 | Teams + PagerDuty |
+| Dead Letter Queue Depth | Service Bus DLQ > 0 messages | P2 | Teams |
+| Certificate Expiry Missed | Cert expires with no TIMELINE renewal triggered | P0 | PagerDuty |
+| HTTPS Verification Failed | HARBOUR post-deploy check fails | P0 | PagerDuty + Email to Ops |
+| LLM API Latency | Azure OpenAI p95 > 30s | P3 | Teams |
+| High False Positive Rate | Any rule FP rate > 20% | P3 | Email to Engineering Lead |
+| Fortify API Unreachable | WATCHTOWER fails 3× in a row | P2 | Teams + InfoSec |
+
+### 24.2 Log Analytics Queries (Key Dashboards)
+
+**PR Review SLA Dashboard — average time from PR open to ASCENT comment:**
+```kusto
+AgentRuns
+| where AgentName == "ASCENT" and Track == "quality_gate"
+| extend DurationSecs = datetime_diff('second', CompletedAt, StartedAt)
+| summarize
+    AvgDuration = avg(DurationSecs),
+    P95Duration = percentile(DurationSecs, 95),
+    TotalRuns   = count()
+  by bin(StartedAt, 1d)
+| render timechart
+```
+
+**Security Finding Classification Breakdown:**
+```kusto
+AuditLog
+| where EventType == "finding_triaged"
+| summarize Count = count() by Decision
+| render piechart
+```
+
+**Certificate Health — days until expiry for all active certs:**
+```kusto
+CertificateInventory
+| extend DaysUntilExpiry = datetime_diff('day', ExpiresOn, now())
+| order by DaysUntilExpiry asc
+| project Subject, Environment, DaysUntilExpiry, Owner
+```
+
+### 24.3 SLA Targets
+
+| Metric | Target | Alert Threshold |
+|---|---|---|
+| PR review completed (webhook → comment) | < 90 seconds | > 5 minutes |
+| Fortify triage per finding | < 30 seconds | > 2 minutes |
+| Certificate renewal initiated before expiry | ≥ 30 days ahead | < 14 days ahead |
+| Agent availability | 99.5% | < 99% in rolling 24h |
+| HTTPS verification after cert deploy | 100% success | Any failure |
+
+---
+
+*End of Low Level Design Document — Version 1.1*  
+*(Sections 16–24 added: Orchestrator code, ASCENT feedback loop, VECTOR implementation, FORGE multi-file handling, HARBOUR App Service, PR comment format, testing strategy, cost estimation, monitoring & alerting)*
