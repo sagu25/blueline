@@ -193,14 +193,14 @@ tab1, tab2, tab3 = st.tabs([
 # TAB 1 — QUALITY GATE
 # ══════════════════════════════════════════════════════════════════════
 with tab1:
-    st.markdown("### CLARION + LUMEN — Code Review Agents")
+    st.markdown("### Quality Gate — Full Code Review Pipeline")
     st.markdown(
-        "Paste a C# or TypeScript code snippet below (or load a sample), "
-        "then click **Run Review**. "
-        "CLARION checks coding standards; LUMEN detects code smells."
+        "All four agents run in sequence: **CLARION** checks standards → "
+        "**LUMEN** detects smells → **VECTOR** scores risk → "
+        "**ASCENT** consolidates into one final review."
     )
 
-    col_left, col_right = st.columns([1, 1])
+    col_left, col_right = st.columns([4, 6])
 
     with col_left:
         lang = st.selectbox("Language", ["csharp", "typescript"], key="lang")
@@ -212,97 +212,238 @@ with tab1:
         code_input = st.text_area(
             "Code to Review",
             value=st.session_state.get("code_input", ""),
-            height=400,
+            height=420,
             key="code_area",
             placeholder="Paste your C# or TypeScript code here..."
         )
 
-        run_review = st.button("🔍 Run Review", type="primary", key="run_review")
+        run_review = st.button("🔍 Run Full Review", type="primary", key="run_review")
+
+        # Agent pipeline status indicators
+        st.markdown("#### Agent Pipeline")
+        status_clarion  = st.empty()
+        status_lumen    = st.empty()
+        status_vector   = st.empty()
+        status_ascent   = st.empty()
+
+        status_clarion.markdown("⬜ CLARION — waiting")
+        status_lumen.markdown("⬜ LUMEN — waiting")
+        status_vector.markdown("⬜ VECTOR — waiting")
+        status_ascent.markdown("⬜ ASCENT — waiting")
 
     with col_right:
         if run_review:
-            if not os.getenv("ANTHROPIC_API_KEY"):
-                st.error("Please enter your Anthropic API key in the sidebar.")
+            from utils.llm_client import get_active_provider
+            if get_active_provider() == "none":
+                st.error("No AI provider configured. Enter credentials in the sidebar.")
             elif not code_input.strip():
                 st.warning("Please paste some code first.")
             else:
                 from agents.clarion import review_code
-                from agents.lumen import detect_smells
+                from agents.lumen   import detect_smells
+                from agents.vector  import score_risk
+                from agents.ascent  import aggregate_review
 
-                with st.spinner("🤖 CLARION is checking coding standards..."):
-                    clarion_result = review_code(code_input, lang)
+                # ── Run all 4 agents ──────────────────────────────
+                status_clarion.markdown("🔄 CLARION — running...")
+                clarion_result = review_code(code_input, lang)
+                status_clarion.markdown("✅ CLARION — done")
 
-                with st.spinner("🤖 LUMEN is detecting code smells..."):
-                    lumen_result = detect_smells(code_input, lang)
+                status_lumen.markdown("🔄 LUMEN — running...")
+                lumen_result = detect_smells(code_input, lang)
+                status_lumen.markdown("✅ LUMEN — done")
 
-                # ── CLARION results ──────────────────────────────────
-                st.markdown("#### CLARION — Coding Standards Report")
+                status_vector.markdown("🔄 VECTOR — running...")
+                vector_result = score_risk(code_input, lang)
+                status_vector.markdown("✅ VECTOR — done")
 
-                score = clarion_result.get("overall_score", 0)
-                sc = score_colour(score)
+                status_ascent.markdown("🔄 ASCENT — aggregating...")
+                ascent_result = aggregate_review(clarion_result, lumen_result, vector_result, lang)
+                status_ascent.markdown("✅ ASCENT — done")
+
+                # ════════════════════════════════════════════════
+                # ASCENT — Consolidated Summary (shown first)
+                # ════════════════════════════════════════════════
+                rec = ascent_result.get("recommendation", "REQUEST_CHANGES")
+                rec_colours = {
+                    "APPROVE":         ("#28A745", "APPROVE"),
+                    "REQUEST_CHANGES": ("#FFA500", "REQUEST CHANGES"),
+                    "BLOCK":           ("#FF0000", "BLOCK"),
+                }
+                rec_col, rec_label = rec_colours.get(rec, ("#888", rec))
+
+                overall = ascent_result.get("overall_score", 0)
+                oc = score_colour(overall)
+
                 st.markdown(
-                    f"**Overall Score:** <span style='color:{sc};font-size:1.5rem;font-weight:bold'>{score}/10</span>  "
-                    f"<br><em>{clarion_result.get('summary','')}</em>",
+                    f"""
+                    <div style='background:#1a1a2e;border-radius:10px;padding:16px 20px;margin-bottom:16px'>
+                      <div style='display:flex;align-items:center;gap:16px'>
+                        <div>
+                          <div style='color:#aaa;font-size:0.8rem;text-transform:uppercase'>ASCENT Recommendation</div>
+                          <div style='color:{rec_col};font-size:1.6rem;font-weight:bold'>{rec_label}</div>
+                        </div>
+                        <div style='margin-left:auto;text-align:right'>
+                          <div style='color:#aaa;font-size:0.8rem'>Overall Score</div>
+                          <div style='color:{oc};font-size:1.6rem;font-weight:bold'>{overall}/10</div>
+                        </div>
+                      </div>
+                      <div style='color:#ccc;margin-top:10px;font-size:0.95rem;line-height:1.5'>
+                        {ascent_result.get("summary", "")}
+                      </div>
+                    </div>
+                    """,
                     unsafe_allow_html=True
                 )
 
-                violations = clarion_result.get("violations", [])
-                if violations:
-                    st.markdown(f"**{len(violations)} violation(s) found:**")
-                    for v in violations:
+                # Biggest risk callout
+                if ascent_result.get("biggest_risk"):
+                    st.markdown(
+                        f"<div style='background:#3d1c1c;border-left:4px solid #FF4B4B;"
+                        f"padding:10px 14px;border-radius:4px;color:#ffcccc;margin-bottom:12px'>"
+                        f"<strong>Biggest Risk:</strong> {ascent_result['biggest_risk']}</div>",
+                        unsafe_allow_html=True
+                    )
+
+                # ── Tier 1 — Must Fix ────────────────────────────
+                t1 = ascent_result.get("tier1_must_fix", [])
+                if t1:
+                    st.markdown(f"#### ⛔ Must Fix Before Merge ({len(t1)})")
+                    for item in t1:
                         with st.expander(
-                            f"{v.get('severity','').upper()} — {v.get('rule','')}  "
-                            f"{'(Line ' + str(v['line']) + ')' if v.get('line') else ''}",
-                            expanded=v.get("severity") == "error"
+                            f"[{item.get('source','?')}] {item.get('issue','')[:80]}",
+                            expanded=True
                         ):
                             st.markdown(
-                                severity_badge(v.get("severity", "info")),
+                                severity_badge("error"), unsafe_allow_html=True
+                            )
+                            st.markdown(f"**Issue:** {item.get('issue','')}")
+                            st.markdown(f"**Action:** {item.get('action','')}")
+
+                # ── Tier 2 — Should Fix ──────────────────────────
+                t2 = ascent_result.get("tier2_should_fix", [])
+                if t2:
+                    st.markdown(f"#### ⚠️ Should Fix ({len(t2)})")
+                    for item in t2:
+                        with st.expander(
+                            f"[{item.get('source','?')}] {item.get('issue','')[:80]}"
+                        ):
+                            st.markdown(
+                                severity_badge("warning"), unsafe_allow_html=True
+                            )
+                            st.markdown(f"**Issue:** {item.get('issue','')}")
+                            st.markdown(f"**Action:** {item.get('action','')}")
+
+                # ── Tier 3 — Consider ────────────────────────────
+                t3 = ascent_result.get("tier3_consider", [])
+                if t3:
+                    st.markdown(f"#### 💡 Consider Fixing ({len(t3)})")
+                    for item in t3:
+                        with st.expander(
+                            f"[{item.get('source','?')}] {item.get('issue','')[:80]}"
+                        ):
+                            st.markdown(
+                                severity_badge("info"), unsafe_allow_html=True
+                            )
+                            st.markdown(f"**Issue:** {item.get('issue','')}")
+                            st.markdown(f"**Action:** {item.get('action','')}")
+
+                # ── Reviewer Checklist ───────────────────────────
+                checklist = ascent_result.get("reviewer_checklist", [])
+                if checklist:
+                    st.markdown("#### Reviewer Checklist")
+                    for item in checklist:
+                        st.markdown(f"- [ ] {item}")
+
+                st.divider()
+
+                # ════════════════════════════════════════════════
+                # Individual Agent Results (collapsed by default)
+                # ════════════════════════════════════════════════
+                st.markdown("#### Individual Agent Reports")
+
+                # ── CLARION detail ───────────────────────────────
+                with st.expander(
+                    f"CLARION — {len(clarion_result.get('violations',[]))} violation(s)  |  "
+                    f"Score {clarion_result.get('overall_score',0)}/10"
+                ):
+                    violations = clarion_result.get("violations", [])
+                    if violations:
+                        for v in violations:
+                            st.markdown(
+                                f"{severity_badge(v.get('severity','info'))} "
+                                f"**{v.get('rule','')}**"
+                                + (f" — Line {v['line']}" if v.get('line') else ""),
                                 unsafe_allow_html=True
                             )
-                            st.markdown(f"**Issue:** {v.get('message','')}")
+                            st.caption(v.get("message", ""))
                             if v.get("fix"):
-                                st.markdown(f"**Fix:**")
                                 st.code(v["fix"], language=lang)
                             st.markdown(
                                 confidence_bar(v.get("confidence", 0)),
                                 unsafe_allow_html=True
                             )
-                else:
-                    st.success("✅ No coding standard violations found!")
+                            st.markdown("---")
+                    else:
+                        st.success("No violations found.")
 
-                st.divider()
-
-                # ── LUMEN results ────────────────────────────────────
-                st.markdown("#### LUMEN — Code Smell Report")
-
-                m_score = lumen_result.get("maintainability_score", 0)
-                mc = score_colour(m_score)
-                st.markdown(
-                    f"**Maintainability Score:** <span style='color:{mc};font-size:1.5rem;font-weight:bold'>{m_score}/10</span>",
-                    unsafe_allow_html=True
-                )
-
-                smells = lumen_result.get("smells", [])
-                if smells:
-                    st.markdown(f"**{len(smells)} smell(s) detected:**")
-                    for s in smells:
-                        effort = s.get("effort", "")
-                        effort_icon = {"low": "🟢", "medium": "🟡", "high": "🔴"}.get(effort, "⚪")
-                        with st.expander(
-                            f"{s.get('severity','').upper()} — {s.get('type','')}  |  {s.get('location','')}",
-                            expanded=s.get("severity") == "major"
-                        ):
+                # ── LUMEN detail ─────────────────────────────────
+                with st.expander(
+                    f"LUMEN — {len(lumen_result.get('smells',[]))} smell(s)  |  "
+                    f"Maintainability {lumen_result.get('maintainability_score',0)}/10"
+                ):
+                    smells = lumen_result.get("smells", [])
+                    if smells:
+                        for s in smells:
+                            effort_icon = {"low": "🟢", "medium": "🟡", "high": "🔴"}.get(
+                                s.get("effort", ""), "⚪"
+                            )
                             st.markdown(
-                                severity_badge(s.get("severity", "minor")),
+                                f"{severity_badge(s.get('severity','minor'))} "
+                                f"**{s.get('type','')}** — {s.get('location','')}",
                                 unsafe_allow_html=True
                             )
-                            st.markdown(f"**Problem:** {s.get('description','')}")
-                            st.markdown(f"**Refactor:** {s.get('refactor','')}")
-                            st.markdown(f"**Effort:** {effort_icon} {effort.capitalize()}")
-                else:
-                    st.success("✅ No code smells detected!")
+                            st.caption(s.get("description", ""))
+                            st.markdown(f"**Refactor:** {s.get('refactor','')}  {effort_icon}")
+                            st.markdown("---")
+                    else:
+                        st.success("No smells detected.")
+
+                # ── VECTOR detail ────────────────────────────────
+                with st.expander(
+                    f"VECTOR — Risk: {vector_result.get('overall_risk_level','?')}  |  "
+                    f"Score {vector_result.get('overall_risk_score', 0):.2f}"
+                ):
+                    metrics = vector_result.get("static_metrics", {})
+                    if metrics:
+                        m1, m2, m3 = st.columns(3)
+                        m1.metric("Cyclomatic Complexity", metrics.get("cyclomatic_complexity", "?"))
+                        m2.metric("Max Nesting Depth",     metrics.get("max_nesting_depth", "?"))
+                        m3.metric("Lines of Code",         metrics.get("lines_of_code", "?"))
+                        m4, m5, m6 = st.columns(3)
+                        m4.metric("Methods",               metrics.get("method_count", "?"))
+                        m5.metric("Dependencies",          metrics.get("dependency_count", "?"))
+                        m6.metric("Has Security Ops",
+                                  "Yes" if metrics.get("has_security_ops") else "No")
+
+                    hotspots = vector_result.get("hotspots", [])
+                    if hotspots:
+                        st.markdown("**Hotspots:**")
+                        for h in hotspots:
+                            rl = h.get("risk_level", "LOW")
+                            col = {"CRITICAL":"#FF0000","HIGH":"#FF4B4B",
+                                   "MEDIUM":"#FFA500","LOW":"#28A745"}.get(rl, "#888")
+                            st.markdown(
+                                f"<span style='color:{col};font-weight:bold'>{rl}</span> "
+                                f"— **{h.get('name','')}**: {h.get('reason','')}",
+                                unsafe_allow_html=True
+                            )
+
+                    if vector_result.get("reviewer_focus"):
+                        st.info(vector_result["reviewer_focus"])
+
         else:
-            st.info("👈 Load sample code or paste your own, then click **Run Review**.")
+            st.info("👈 Load sample code or paste your own, then click **Run Full Review**.")
 
 
 # ══════════════════════════════════════════════════════════════════════
