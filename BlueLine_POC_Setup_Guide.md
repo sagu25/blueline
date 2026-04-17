@@ -1,7 +1,7 @@
 # Project BlueLine POC — Setup Guide
 
-**Version:** 1.0  
-**Date:** 2026-04-15  
+**Version:** 1.1  
+**Date:** 2026-04-17  
 **Time to set up:** ~10 minutes
 
 ---
@@ -31,7 +31,9 @@ poc/
 │
 ├── agents/
 │   ├── clarion.py          ← Quality Gate: coding standards agent
-│   ├── lumen.py            ← Quality Gate: code smell agent
+│   ├── lumen.py            ← Quality Gate: code smell detector
+│   ├── vector.py           ← Quality Gate: risk scorer and hotspot analyser
+│   ├── ascent.py           ← Quality Gate: aggregator and final recommendation
 │   ├── bulwark.py          ← Security: vulnerability triage agent
 │   └── timeline.py         ← Certificate: expiry analysis agent
 │
@@ -166,22 +168,48 @@ If you see **"🔴 Not configured"**, your `.env` file credentials are missing o
 
 ---
 
-### Tab 1 — Quality Gate (CLARION + LUMEN)
+### Tab 1 — Quality Gate (Full 4-Agent Pipeline)
+
+The Quality Gate runs all four agents in sequence and produces a single consolidated review:
+
+| Agent | What it does |
+|---|---|
+| CLARION | Checks naming conventions, security patterns, coding standards |
+| LUMEN | Detects code smells (long methods, deep nesting, magic numbers, etc.) |
+| VECTOR | Scores risk level using static complexity analysis + hotspot identification |
+| ASCENT | Aggregates all three outputs into one prioritised recommendation |
 
 **For the demo:**
 
 1. Select language: **csharp**
-2. Click **"📂 Load Sample Code"** — this loads a C# file with deliberate violations
-3. Click **"🔍 Run Review"**
-4. Wait 10–20 seconds for the AI to respond
-5. Results appear on the right side — violations with fixes, smell detection with scores
+2. Click **"📂 Load Sample Code"** — loads a C# file with deliberate violations
+3. Click **"🔍 Run Full Review"**
+4. Watch the pipeline status — each agent shows a live status indicator as it runs
+5. Wait 30–60 seconds for all four agents to complete
+6. The right panel shows:
+   - **ASCENT Summary** — overall recommendation (APPROVE / REQUEST\_CHANGES / BLOCK), score out of 10, and the single biggest risk
+   - **Tier 1 — Must Fix** — critical issues that must be resolved before merge (expanded by default)
+   - **Tier 2 — Should Fix** — important but not blocking
+   - **Tier 3 — Consider** — informational improvements
+   - **Reviewer Checklist** — things a human must manually verify
+   - **Individual agent reports** — CLARION, LUMEN, and VECTOR results collapsed below (expand to see raw findings)
+
+**Human Review Gate (appears after results load):**
+
+After the AI review completes, a reviewer form appears. This simulates the human-in-the-loop step:
+
+1. **Step 1** — React to each finding: mark it as *Agree* or *False Positive*
+2. **Step 2** — Override the ASCENT recommendation if needed (or keep the AI decision)
+3. **Step 3** — Add a free-text comment for the developer
+4. Click **"Submit Review Decision"**
+5. The final decision card shows: agreed vs false positive counts, false positive rate, and a warning if FP rate exceeds 20% (indicating ASCENT's rules may need tuning)
 
 **To test with your own code:**
 
 1. Open any C# or TypeScript file from your project
 2. Copy the content
 3. Paste it into the text area
-4. Click Run Review
+4. Click Run Full Review
 
 ---
 
@@ -303,4 +331,4 @@ The Azure DevOps / Fortify / Key Vault connections are integration plumbing — 
 
 ---
 
-*End of Setup Guide — Project BlueLine POC v1.0*
+*End of Setup Guide — Project BlueLine POC v1.1*
