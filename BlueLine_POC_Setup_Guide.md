@@ -67,11 +67,6 @@ poc/
    - The name of the deployed model (usually `gpt-4o` or `gpt-4`)
    - Found in: Azure OpenAI Studio → Deployments
 
-### If Azure OpenAI is not available:
-
-Use an Anthropic API key instead (requires account at console.anthropic.com).  
-Note: This sends data to Anthropic's external servers — check your company policy first.
-
 ---
 
 ## Section 3 — One-Time Setup Steps
@@ -164,7 +159,7 @@ When the app opens, look at the **left sidebar**:
 2. The endpoint, key, and deployment name from your `.env` file will be pre-filled
 3. You should see **"🟢 Connected: Azure OpenAI"** at the bottom of the sidebar
 
-If you see **"🔴 Not configured"**, your `.env` file credentials are missing or incorrect.
+If you see **"🔴 Not configured"**, your `.env` file credentials are missing or incorrect. All four Azure OpenAI lines must be filled in.
 
 ---
 
