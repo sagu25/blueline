@@ -442,6 +442,172 @@ with tab1:
                     if vector_result.get("reviewer_focus"):
                         st.info(vector_result["reviewer_focus"])
 
+                # ════════════════════════════════════════════════
+                # HUMAN LOOP — Reviewer Feedback Gate
+                # ════════════════════════════════════════════════
+                st.divider()
+                st.markdown("#### Human Review Gate")
+                st.caption(
+                    "In production this happens on the Azure DevOps PR — "
+                    "reviewer reacts to each comment and posts their decision. "
+                    "In this POC you submit feedback here. "
+                    "ASCENT uses this to track false positive rates per rule."
+                )
+
+                # Store results in session so feedback form persists
+                st.session_state["last_ascent"]  = ascent_result
+                st.session_state["last_clarion"] = clarion_result
+                st.session_state["last_lumen"]   = lumen_result
+                st.session_state["review_done"]  = True
+
+        # ── Human feedback form (shown after any completed review) ──
+        if st.session_state.get("review_done"):
+            ascent_r  = st.session_state.get("last_ascent", {})
+            clarion_r = st.session_state.get("last_clarion", {})
+            lumen_r   = st.session_state.get("last_lumen", {})
+
+            all_findings = []
+            for item in ascent_r.get("tier1_must_fix", []):
+                all_findings.append({"tier": "Must Fix",    "item": item})
+            for item in ascent_r.get("tier2_should_fix", []):
+                all_findings.append({"tier": "Should Fix",  "item": item})
+            for item in ascent_r.get("tier3_consider", []):
+                all_findings.append({"tier": "Consider",    "item": item})
+
+            with st.form("human_review_form"):
+                st.markdown("**Step 1 — React to each finding**")
+                st.caption("Mark each finding as Agree (AI was correct) or False Positive (AI was wrong)")
+
+                reactions = {}
+                for idx, finding in enumerate(all_findings):
+                    item  = finding["item"]
+                    tier  = finding["tier"]
+                    label = f"[{item.get('source','?')}] {item.get('issue','')[:70]}"
+
+                    col_label, col_react = st.columns([5, 2])
+                    with col_label:
+                        tier_col = {
+                            "Must Fix":   "#FF4B4B",
+                            "Should Fix": "#FFA500",
+                            "Consider":   "#1E90FF"
+                        }.get(tier, "#888")
+                        st.markdown(
+                            f"<small style='color:{tier_col};font-weight:bold'>{tier}</small><br>{label}",
+                            unsafe_allow_html=True
+                        )
+                    with col_react:
+                        reaction = st.radio(
+                            f"reaction_{idx}",
+                            ["Agree", "False Positive"],
+                            horizontal=True,
+                            label_visibility="collapsed",
+                            key=f"react_{idx}"
+                        )
+                        reactions[idx] = {
+                            "source":   item.get("source", ""),
+                            "issue":    item.get("issue", ""),
+                            "reaction": reaction
+                        }
+
+                st.markdown("**Step 2 — Override ASCENT recommendation (optional)**")
+                ai_rec = ascent_r.get("recommendation", "REQUEST_CHANGES")
+                human_decision = st.radio(
+                    "Your final decision",
+                    ["Keep AI recommendation", "APPROVE", "REQUEST_CHANGES", "BLOCK"],
+                    horizontal=True,
+                    key="human_decision"
+                )
+
+                st.markdown("**Step 3 — Add reviewer comment (optional)**")
+                reviewer_comment = st.text_area(
+                    "Comment for the developer",
+                    placeholder="e.g. The SQL injection fix is critical — please also check OrderRepository.cs which has the same pattern.",
+                    height=80,
+                    key="reviewer_comment"
+                )
+
+                submitted = st.form_submit_button(
+                    "Submit Human Review",
+                    type="primary",
+                    use_container_width=True
+                )
+
+            if submitted:
+                # ── Calculate feedback stats ──────────────────
+                agreed        = [r for r in reactions.values() if r["reaction"] == "Agree"]
+                false_pos     = [r for r in reactions.values() if r["reaction"] == "False Positive"]
+                fp_rate       = len(false_pos) / len(reactions) if reactions else 0
+
+                final_decision = (
+                    ai_rec if human_decision == "Keep AI recommendation"
+                    else human_decision
+                )
+
+                # ── Show submitted summary ────────────────────
+                decision_colours = {
+                    "APPROVE":         "#28A745",
+                    "REQUEST_CHANGES": "#FFA500",
+                    "BLOCK":           "#FF0000"
+                }
+                dc = decision_colours.get(final_decision, "#888")
+
+                st.markdown(
+                    f"""
+                    <div style='background:#0d1f0d;border:1px solid #28A745;
+                    border-radius:10px;padding:16px 20px;margin-top:12px'>
+                      <div style='color:#28A745;font-size:1.1rem;font-weight:bold;
+                      margin-bottom:8px'>Human Review Submitted</div>
+                      <div style='display:flex;gap:32px;flex-wrap:wrap'>
+                        <div>
+                          <div style='color:#aaa;font-size:0.8rem'>Final Decision</div>
+                          <div style='color:{dc};font-size:1.3rem;font-weight:bold'>
+                          {final_decision}</div>
+                        </div>
+                        <div>
+                          <div style='color:#aaa;font-size:0.8rem'>Findings Agreed</div>
+                          <div style='color:#28A745;font-size:1.3rem;font-weight:bold'>
+                          {len(agreed)} / {len(reactions)}</div>
+                        </div>
+                        <div>
+                          <div style='color:#aaa;font-size:0.8rem'>False Positives</div>
+                          <div style='color:{"#FF4B4B" if false_pos else "#28A745"};
+                          font-size:1.3rem;font-weight:bold'>
+                          {len(false_pos)} ({fp_rate:.0%})</div>
+                        </div>
+                      </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+                if reviewer_comment.strip():
+                    st.info(f"Reviewer comment: *{reviewer_comment.strip()}*")
+
+                # ── False positive feedback to ASCENT ─────────
+                if false_pos:
+                    st.markdown("**ASCENT would log the following false positives:**")
+                    for fp in false_pos:
+                        st.markdown(
+                            f"- `{fp['source']}` flagged **\"{fp['issue'][:60]}\"** "
+                            f"as false positive — rule confidence will be reduced"
+                        )
+                    if fp_rate > 0.20:
+                        st.warning(
+                            f"False positive rate is {fp_rate:.0%} — above the 20% threshold. "
+                            f"In production, ASCENT would flag these rules for engineering review "
+                            f"and notify the Engineering Lead."
+                        )
+
+                # ── Decision mismatch note ────────────────────
+                if final_decision != ai_rec:
+                    st.markdown(
+                        f"> Human overrode ASCENT's **{ai_rec}** to **{final_decision}**. "
+                        f"In production this override is logged to the audit trail "
+                        f"and feeds back into ASCENT's confidence calibration."
+                    )
+                else:
+                    st.success("Human decision matches ASCENT recommendation — no override needed.")
+
         else:
             st.info("👈 Load sample code or paste your own, then click **Run Full Review**.")
 
