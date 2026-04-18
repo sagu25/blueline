@@ -31,6 +31,12 @@ Consider these factors:
 - No test indicators (no Assert, should, expect, Mock) → adds risk
 - Security-sensitive operations (SQL, file IO, auth, crypto, HTTP calls) → HIGH risk regardless of complexity
 - Mixed responsibilities (data access + business logic + UI in one class) → HIGH risk
+- .Result or .Wait() on async methods → CRITICAL risk (deadlock / thread pool starvation)
+- new HttpClient() inside a method or using block → HIGH risk (socket exhaustion)
+- File.InputStream.CopyTo without size check → HIGH risk (DoS / memory exhaustion)
+- EnableCorsAttribute with wildcard origin and SupportsCredentials → HIGH risk (CSRF)
+- Empty catch blocks (catch with no body) → MEDIUM risk (silent failure, masked bugs)
+- No .AsNoTracking() on read-only EF queries → MEDIUM risk (unnecessary memory overhead)
 
 === RISK LEVELS ===
 - LOW     (0.0–0.3): Safe to review quickly
@@ -78,6 +84,19 @@ SECURITY_PATTERNS = [
     r'token', r'Token', r'auth', r'Auth', r'crypto', r'Crypto',
     r'encrypt', r'Encrypt', r'hash', r'Hash', r'http\.get', r'http\.post'
 ]
+
+CRITICAL_ASYNC_PATTERNS = [
+    r'\.Result\b',
+    r'\.Wait\(\)',
+]
+
+HIGH_RISK_PATTERNS = [
+    r'new\s+HttpClient\s*\(\)',
+    r'InputStream\.CopyTo',
+    r'EnableCorsAttribute\s*\(\s*["\']?\*',
+]
+
+EMPTY_CATCH_PATTERN = r'catch\s*\([^)]*\)\s*\{\s*\}'
 
 TEST_PATTERNS = [
     r'\bAssert\b', r'\bshould\b', r'\bexpect\b', r'\bMock\b',
@@ -127,14 +146,22 @@ def compute_static_metrics(code: str, language: str) -> dict:
     has_security = any(re.search(p, code) for p in SECURITY_PATTERNS)
     has_tests    = any(re.search(p, code) for p in TEST_PATTERNS)
 
+    # DAS-specific critical risk signals
+    blocking_async_count = sum(len(re.findall(p, code)) for p in CRITICAL_ASYNC_PATTERNS)
+    high_risk_hits       = [p for p in HIGH_RISK_PATTERNS if re.search(p, code)]
+    empty_catch_count    = len(re.findall(EMPTY_CATCH_PATTERN, code))
+
     return {
-        "lines_of_code":      len(non_empty),
-        "cyclomatic_complexity": complexity,
-        "max_nesting_depth":  max_depth,
-        "method_count":       method_count,
-        "dependency_count":   dep_count,
-        "has_security_ops":   has_security,
-        "has_test_indicators": has_tests,
+        "lines_of_code":           len(non_empty),
+        "cyclomatic_complexity":   complexity,
+        "max_nesting_depth":       max_depth,
+        "method_count":            method_count,
+        "dependency_count":        dep_count,
+        "has_security_ops":        has_security,
+        "has_test_indicators":     has_tests,
+        "blocking_async_calls":    blocking_async_count,
+        "high_risk_pattern_hits":  len(high_risk_hits),
+        "empty_catch_blocks":      empty_catch_count,
     }
 
 
@@ -149,13 +176,16 @@ def score_risk(code: str, language: str = "auto") -> dict:
 Analyse the following {language} code for risk.
 
 Static metrics already computed:
-- Lines of code:          {metrics['lines_of_code']}
-- Cyclomatic complexity:  {metrics['cyclomatic_complexity']}
-- Max nesting depth:      {metrics['max_nesting_depth']} levels
-- Method / function count:{metrics['method_count']}
-- Import / dependency count: {metrics['dependency_count']}
-- Contains security-sensitive operations: {metrics['has_security_ops']}
-- Contains test indicators: {metrics['has_test_indicators']}
+- Lines of code:                    {metrics['lines_of_code']}
+- Cyclomatic complexity:            {metrics['cyclomatic_complexity']}
+- Max nesting depth:                {metrics['max_nesting_depth']} levels
+- Method / function count:          {metrics['method_count']}
+- Import / dependency count:        {metrics['dependency_count']}
+- Contains security-sensitive ops:  {metrics['has_security_ops']}
+- Contains test indicators:         {metrics['has_test_indicators']}
+- Blocking async calls (.Result/.Wait): {metrics['blocking_async_calls']} occurrences
+- High-risk DAS pattern hits (new HttpClient / file upload / CORS wildcard): {metrics['high_risk_pattern_hits']}
+- Empty catch blocks:               {metrics['empty_catch_blocks']}
 
 Code:
 ```{language}

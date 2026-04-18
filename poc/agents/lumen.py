@@ -23,6 +23,12 @@ Review the provided code and identify the following types of issues:
 - God Class: A class that knows too much or does too much
 - Primitive Obsession: Using primitives where a small class/struct would be cleaner
 
+=== .NET-SPECIFIC STRUCTURAL SMELLS ===
+- DbContext Singleton / Shared Instance: DbContext held as a static field or singleton — causes stale data, memory leaks, and thread-safety issues; must be scoped per request
+- TransactionScope Without Async Flow: TransactionScope used in async code without TransactionScopeAsyncFlowOption.Enabled — transaction context silently lost across await boundaries
+- N+1 Query Pattern: Separate database queries issued inside a loop for each item — must be replaced with .Include() eager loading or a single joined query
+- Blocking Async (Result/Wait): .Result or .Wait() used on async methods inside a class — deadlock risk; the entire call chain needs to be made async
+
 === OUTPUT FORMAT ===
 Respond with a valid JSON object in this exact structure:
 {

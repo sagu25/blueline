@@ -150,26 +150,24 @@ with st.sidebar:
 
     st.divider()
 
-    # ── Azure DevOps note ──
+    # ── Azure DevOps connection ──
     st.markdown("#### Azure DevOps")
-    st.caption(
-        "In production, BlueLine connects to Azure DevOps via webhook — "
-        "it auto-fetches PR diffs and posts comments directly on the PR. "
-        "In this POC, you paste code manually to demonstrate the AI agents."
-    )
-    with st.expander("What ADO integration looks like"):
-        st.markdown("""
-**Production flow:**
-1. Developer opens PR in Azure DevOps
-2. ADO fires a webhook → BlueLine receives the PR diff automatically
-3. CLARION + LUMEN analyse the diff
-4. Agents post inline comments directly on the PR
-5. Developer sees AI review alongside human reviewer comments
+    from utils.azure_devops import is_configured
+    if is_configured():
+        st.success("🟢 ADO Connected — Live PR Review enabled")
+    else:
+        st.warning("🟡 ADO not configured — add credentials to .env")
+        st.caption("Required: ORG_URL, PAT, PROJECT, REPO — see .env.example")
 
-**POC simplification:**
-- You paste code → same AI agents run → same output
-- No webhook needed to demonstrate the intelligence
-        """)
+    ado_org     = st.text_input("ADO Org URL",     value=os.getenv("AZURE_DEVOPS_ORG_URL",""),  placeholder="https://dev.azure.com/your-org", key="ado_org")
+    ado_pat     = st.text_input("Personal Access Token", value=os.getenv("AZURE_DEVOPS_PAT",""), type="password", key="ado_pat")
+    ado_project = st.text_input("Project",         value=os.getenv("AZURE_DEVOPS_PROJECT",""), placeholder="YourProjectName", key="ado_project")
+    ado_repo    = st.text_input("Repository",      value=os.getenv("AZURE_DEVOPS_REPO",""),    placeholder="YourRepoName",    key="ado_repo")
+
+    if ado_org:     os.environ["AZURE_DEVOPS_ORG_URL"]  = ado_org
+    if ado_pat:     os.environ["AZURE_DEVOPS_PAT"]      = ado_pat
+    if ado_project: os.environ["AZURE_DEVOPS_PROJECT"]  = ado_project
+    if ado_repo:    os.environ["AZURE_DEVOPS_REPO"]     = ado_repo
 
     st.divider()
     st.caption("POC v1.0 — BlueLine Team")
@@ -182,10 +180,11 @@ st.markdown("""
 st.divider()
 
 # ── tabs ───────────────────────────────────────────────────────────────────────
-tab1, tab2, tab3 = st.tabs([
+tab1, tab2, tab3, tab4 = st.tabs([
     "🧑‍💻  Quality Gate  (CLARION + LUMEN)",
     "🔒  Security Loop  (BULWARK)",
-    "📜  Certificate Loop  (TIMELINE)"
+    "📜  Certificate Loop  (TIMELINE)",
+    "🔗  Live PR Review  (Azure DevOps)",
 ])
 
 
@@ -823,6 +822,269 @@ with tab3:
 
         else:
             st.info("👈 Load a sample certificate or fill in the details, then click **Analyse Certificate**.")
+
+# ══════════════════════════════════════════════════════════════════════
+# TAB 4 — LIVE PR REVIEW (Azure DevOps)
+# ══════════════════════════════════════════════════════════════════════
+with tab4:
+    st.markdown("### Live PR Review — Azure DevOps Integration")
+    st.markdown(
+        "Connect to your Azure DevOps repo, pick an open PR, and BlueLine will "
+        "fetch the real code, run all 4 agents, and post findings back as PR comments."
+    )
+
+    from utils.azure_devops import is_configured, list_pull_requests
+
+    if not is_configured():
+        st.error(
+            "Azure DevOps not configured. "
+            "Enter your Org URL, PAT, Project, and Repo in the sidebar, "
+            "or add them to your .env file."
+        )
+        st.code("""
+# .env — fill in these 4 values
+AZURE_DEVOPS_ORG_URL=https://dev.azure.com/your-org
+AZURE_DEVOPS_PAT=your-pat-here
+AZURE_DEVOPS_PROJECT=YourProject
+AZURE_DEVOPS_REPO=YourRepo
+        """)
+        st.stop()
+
+    # ── Shadow mode toggle ──────────────────────────────────────────
+    col_sh1, col_sh2 = st.columns([3, 1])
+    with col_sh1:
+        st.markdown("**Shadow Mode**")
+        st.caption(
+            "ON = agents review the PR and show results here, but nothing is posted to Azure DevOps.  \n"
+            "OFF = findings are posted as real comments on the PR."
+        )
+    with col_sh2:
+        shadow_mode = st.toggle("Shadow Mode", value=True, key="shadow_toggle")
+        if shadow_mode:
+            st.markdown("<span style='color:#FFA500;font-weight:bold'>ON — read only</span>", unsafe_allow_html=True)
+        else:
+            st.markdown("<span style='color:#FF4B4B;font-weight:bold'>OFF — will POST</span>", unsafe_allow_html=True)
+
+    st.divider()
+
+    # ── Load PR list ────────────────────────────────────────────────
+    col_pr1, col_pr2 = st.columns([4, 1])
+    with col_pr2:
+        refresh = st.button("🔄 Refresh PRs", key="refresh_prs")
+
+    if "pr_list" not in st.session_state or refresh:
+        with st.spinner("Fetching open PRs from Azure DevOps..."):
+            try:
+                st.session_state["pr_list"] = list_pull_requests(status="active", top=30)
+            except Exception as ex:
+                st.error(f"Could not connect to Azure DevOps: {ex}")
+                st.session_state["pr_list"] = []
+
+    prs = st.session_state.get("pr_list", [])
+
+    if not prs:
+        st.info("No active pull requests found in this repo.")
+    else:
+        with col_pr1:
+            pr_options = {
+                f"PR #{p['id']} — {p['title']} ({p['created_by']})" : p["id"]
+                for p in prs
+            }
+            selected_label = st.selectbox("Select a Pull Request", list(pr_options.keys()), key="pr_select")
+            selected_pr_id = pr_options[selected_label]
+
+        selected_pr = next(p for p in prs if p["id"] == selected_pr_id)
+        st.markdown(
+            f"**Branch:** `{selected_pr['source_branch']}` → `{selected_pr['target_branch']}`  "
+            f"&nbsp;|&nbsp; **Created by:** {selected_pr['created_by']}"
+        )
+
+        run_live = st.button("🔍 Run Quality Gate on this PR", type="primary", key="run_live")
+
+        if run_live:
+            if get_active_provider() == "none":
+                st.error("No AI provider configured. Enter Azure OpenAI credentials in the sidebar.")
+            else:
+                from utils.pr_runner import run_pr_review
+
+                status_log = st.empty()
+                log_lines  = []
+
+                def progress(msg):
+                    log_lines.append(msg)
+                    status_log.markdown(
+                        "<div style='background:#111;padding:10px;border-radius:6px;font-family:monospace;font-size:0.85rem'>"
+                        + "<br>".join(f"▸ {l}" for l in log_lines[-8:])
+                        + "</div>",
+                        unsafe_allow_html=True
+                    )
+
+                with st.spinner("Running Quality Gate..."):
+                    try:
+                        result = run_pr_review(
+                            pr_id=selected_pr_id,
+                            shadow_mode=shadow_mode,
+                            progress_callback=progress,
+                        )
+                        st.session_state["live_review_result"] = result
+                    except Exception as ex:
+                        st.error(f"Review failed: {ex}")
+                        result = None
+
+                if result:
+                    status_log.empty()
+
+                    # ── Errors ───────────────────────────────────────
+                    for err in result.get("errors", []):
+                        st.warning(err)
+
+                    ascent  = result.get("ascent", {})
+                    files   = result.get("files", [])
+                    posted  = result.get("posted", False)
+
+                    if not ascent:
+                        st.error("No results returned — check errors above.")
+                    else:
+                        # ── ASCENT header ─────────────────────────────
+                        rec = ascent.get("recommendation", "REQUEST_CHANGES")
+                        rec_colours = {
+                            "APPROVE":         ("#28A745", "APPROVE"),
+                            "REQUEST_CHANGES": ("#FFA500", "REQUEST CHANGES"),
+                            "BLOCK":           ("#FF0000", "BLOCK"),
+                        }
+                        rec_col, rec_label = rec_colours.get(rec, ("#888", rec))
+                        overall = ascent.get("overall_score", 0)
+                        oc = score_colour(overall)
+
+                        st.markdown(
+                            f"""
+                            <div style='background:#1a1a2e;border-radius:10px;padding:16px 20px;margin-bottom:16px'>
+                              <div style='display:flex;align-items:center;gap:16px'>
+                                <div>
+                                  <div style='color:#aaa;font-size:0.8rem'>ASCENT Recommendation</div>
+                                  <div style='color:{rec_col};font-size:1.6rem;font-weight:bold'>{rec_label}</div>
+                                </div>
+                                <div style='margin-left:auto;text-align:right'>
+                                  <div style='color:#aaa;font-size:0.8rem'>Overall Score</div>
+                                  <div style='color:{oc};font-size:1.6rem;font-weight:bold'>{overall}/10</div>
+                                </div>
+                              </div>
+                              <div style='color:#ccc;margin-top:10px;font-size:0.95rem'>
+                                {ascent.get("summary","")}
+                              </div>
+                            </div>
+                            """,
+                            unsafe_allow_html=True
+                        )
+
+                        if ascent.get("biggest_risk"):
+                            st.markdown(
+                                f"<div style='background:#3d1c1c;border-left:4px solid #FF4B4B;"
+                                f"padding:10px 14px;border-radius:4px;color:#ffcccc;margin-bottom:12px'>"
+                                f"<strong>Biggest Risk:</strong> {ascent['biggest_risk']}</div>",
+                                unsafe_allow_html=True
+                            )
+
+                        # ── Tiers ─────────────────────────────────────
+                        t1 = ascent.get("tier1_must_fix", [])
+                        if t1:
+                            st.markdown(f"#### ⛔ Must Fix Before Merge ({len(t1)})")
+                            for item in t1:
+                                with st.expander(f"[{item.get('source','?')}] {item.get('issue','')[:80]}", expanded=True):
+                                    st.markdown(severity_badge("error"), unsafe_allow_html=True)
+                                    st.markdown(f"**Issue:** {item.get('issue','')}")
+                                    st.markdown(f"**Action:** {item.get('action','')}")
+
+                        t2 = ascent.get("tier2_should_fix", [])
+                        if t2:
+                            st.markdown(f"#### ⚠️ Should Fix ({len(t2)})")
+                            for item in t2:
+                                with st.expander(f"[{item.get('source','?')}] {item.get('issue','')[:80]}"):
+                                    st.markdown(severity_badge("warning"), unsafe_allow_html=True)
+                                    st.markdown(f"**Issue:** {item.get('issue','')}")
+                                    st.markdown(f"**Action:** {item.get('action','')}")
+
+                        t3 = ascent.get("tier3_consider", [])
+                        if t3:
+                            st.markdown(f"#### 💡 Consider ({len(t3)})")
+                            for item in t3:
+                                with st.expander(f"[{item.get('source','?')}] {item.get('issue','')[:80]}"):
+                                    st.markdown(f"**Issue:** {item.get('issue','')}")
+                                    st.markdown(f"**Action:** {item.get('action','')}")
+
+                        checklist = ascent.get("reviewer_checklist", [])
+                        if checklist:
+                            st.markdown("#### Reviewer Checklist")
+                            for item in checklist:
+                                st.markdown(f"- [ ] {item}")
+
+                        st.divider()
+
+                        # ── Per-file breakdown ────────────────────────
+                        st.markdown(f"#### Files Reviewed ({len(files)})")
+                        for file_r in files:
+                            fname  = file_r["path"].split("/")[-1]
+                            v_count = len(file_r["clarion"].get("violations", []))
+                            s_count = len(file_r["lumen"].get("smells", []))
+                            risk    = file_r["vector"].get("overall_risk_level", "?")
+                            risk_col = {"CRITICAL":"#FF0000","HIGH":"#FF4B4B","MEDIUM":"#FFA500","LOW":"#28A745"}.get(risk,"#888")
+
+                            with st.expander(
+                                f"{fname}  |  "
+                                f"{v_count} violation(s)  |  "
+                                f"{s_count} smell(s)  |  "
+                                f"Risk: {risk}"
+                            ):
+                                st.markdown(f"**Full path:** `{file_r['path']}`")
+                                st.markdown(
+                                    f"**Risk Level:** <span style='color:{risk_col};font-weight:bold'>{risk}</span>",
+                                    unsafe_allow_html=True
+                                )
+
+                                if file_r["clarion"].get("violations"):
+                                    st.markdown("**CLARION Violations:**")
+                                    for v in file_r["clarion"]["violations"]:
+                                        st.markdown(
+                                            f"{severity_badge(v.get('severity','info'))} "
+                                            f"**{v.get('rule','')}**"
+                                            + (f" — Line {v['line']}" if v.get("line") else ""),
+                                            unsafe_allow_html=True
+                                        )
+                                        st.caption(v.get("message",""))
+                                        if v.get("fix"):
+                                            st.code(v["fix"], language=file_r["lang"])
+
+                                if file_r["lumen"].get("smells"):
+                                    st.markdown("**LUMEN Smells:**")
+                                    for s in file_r["lumen"]["smells"]:
+                                        st.markdown(
+                                            f"{severity_badge(s.get('severity','minor'))} "
+                                            f"**{s.get('type','')}** — {s.get('location','')}",
+                                            unsafe_allow_html=True
+                                        )
+                                        st.caption(s.get("description",""))
+
+                        st.divider()
+
+                        # ── Summary comment preview ───────────────────
+                        with st.expander("Preview — what gets posted to the PR"):
+                            st.markdown(result.get("summary_comment",""))
+
+                        # ── Post status ───────────────────────────────
+                        if shadow_mode:
+                            st.info(
+                                "**Shadow Mode ON** — findings shown above but NOT posted to Azure DevOps.  \n"
+                                "Toggle Shadow Mode OFF in the sidebar and re-run to post real comments."
+                            )
+                        else:
+                            if posted:
+                                st.success(
+                                    f"Comments posted to PR #{selected_pr_id} in Azure DevOps. "
+                                    "Go to your PR to see the inline findings and summary."
+                                )
+                            else:
+                                st.warning("Shadow mode was off but posting did not complete — check errors above.")
+
 
 # ── footer ─────────────────────────────────────────────────────────────────────
 st.divider()
