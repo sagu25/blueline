@@ -271,8 +271,9 @@ with tab1:
                 }
                 rec_col, rec_label = rec_colours.get(rec, ("#888", rec))
 
-                overall = ascent_result.get("overall_score", 0)
+                overall = ascent_result.get("overall_score") or 0
                 oc = score_colour(overall)
+                overall_display = f"{overall}/10" if overall else "—"
 
                 st.markdown(
                     f"""
@@ -284,7 +285,7 @@ with tab1:
                         </div>
                         <div style='margin-left:auto;text-align:right'>
                           <div style='color:#aaa;font-size:0.8rem'>Overall Score</div>
-                          <div style='color:{oc};font-size:1.6rem;font-weight:bold'>{overall}/10</div>
+                          <div style='color:{oc};font-size:1.6rem;font-weight:bold'>{overall_display}</div>
                         </div>
                       </div>
                       <div style='color:#ccc;margin-top:10px;font-size:0.95rem;line-height:1.5'>
@@ -1214,8 +1215,9 @@ AZURE_DEVOPS_REPO=YourRepo
                             "BLOCK":           ("#FF0000", "BLOCK"),
                         }
                         rec_col, rec_label = rec_colours.get(rec, ("#888", rec))
-                        overall = ascent.get("overall_score", 0)
+                        overall = ascent.get("overall_score") or 0
                         oc = score_colour(overall)
+                        overall_display = f"{overall}/10" if overall else "—"
 
                         st.markdown(
                             f"""
@@ -1227,7 +1229,7 @@ AZURE_DEVOPS_REPO=YourRepo
                                 </div>
                                 <div style='margin-left:auto;text-align:right'>
                                   <div style='color:#aaa;font-size:0.8rem'>Overall Score</div>
-                                  <div style='color:{oc};font-size:1.6rem;font-weight:bold'>{overall}/10</div>
+                                  <div style='color:{oc};font-size:1.6rem;font-weight:bold'>{overall_display}</div>
                                 </div>
                               </div>
                               <div style='color:#ccc;margin-top:10px;font-size:0.95rem'>

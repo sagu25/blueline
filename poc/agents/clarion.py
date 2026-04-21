@@ -140,7 +140,7 @@ Return only the JSON response as described. No extra text.
     except json.JSONDecodeError:
         return {
             "summary": "Could not parse agent response.",
-            "overall_score": 0,
+            "overall_score": None,
             "violations": [],
             "raw_response": raw
         }

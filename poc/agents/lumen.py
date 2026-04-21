@@ -81,7 +81,7 @@ Return only the JSON response as described. No extra text.
         return json.loads(clean)
     except json.JSONDecodeError:
         return {
-            "maintainability_score": 0,
+            "maintainability_score": None,
             "smells": [],
             "raw_response": raw
         }

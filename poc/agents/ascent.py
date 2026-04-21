@@ -135,7 +135,7 @@ Produce the consolidated review JSON as described. No extra text.
         return {
             "recommendation": "REQUEST_CHANGES",
             "summary": "Could not parse ASCENT response. Review agent outputs individually.",
-            "overall_score": 0,
+            "overall_score": None,
             "tier1_must_fix": [],
             "tier2_should_fix": [],
             "tier3_consider": [],

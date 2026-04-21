@@ -197,15 +197,20 @@ def run_pr_review(pr_id: int, shadow_mode: bool = True, progress_callback=None) 
 
         # Accumulate for ASCENT
         combined_clarion["violations"].extend(clarion.get("violations", []))
-        combined_clarion["overall_score"] = min(
-            combined_clarion["overall_score"] or 10,
-            clarion.get("overall_score", 10)
-        )
+        clarion_score = clarion.get("overall_score") or None
+        if clarion_score:
+            combined_clarion["overall_score"] = min(
+                combined_clarion["overall_score"] or clarion_score,
+                clarion_score
+            )
+
         combined_lumen["smells"].extend(lumen.get("smells", []))
-        combined_lumen["maintainability_score"] = min(
-            combined_lumen["maintainability_score"] or 10,
-            lumen.get("maintainability_score", 10)
-        )
+        lumen_score = lumen.get("maintainability_score") or None
+        if lumen_score:
+            combined_lumen["maintainability_score"] = min(
+                combined_lumen["maintainability_score"] or lumen_score,
+                lumen_score
+            )
         # Escalate risk level to worst seen
         v_risk = vector.get("overall_risk_score", 0.0)
         if v_risk > combined_vector["overall_risk_score"]:
