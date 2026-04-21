@@ -181,9 +181,9 @@ st.divider()
 
 # ── tabs ───────────────────────────────────────────────────────────────────────
 tab1, tab2, tab3, tab4 = st.tabs([
-    "🧑‍💻  Quality Gate  (CLARION + LUMEN)",
-    "🔒  Security Loop  (BULWARK)",
-    "📜  Certificate Loop  (TIMELINE)",
+    "🧑‍💻  Quality Gate  (CLARION + LUMEN + VECTOR + ASCENT)",
+    "🔒  Security Loop  (WATCHTOWER → BULWARK → FORGE → STEWARD)",
+    "📜  Certificate Loop  (REGENT → TIMELINE → COURIER → HARBOUR)",
     "🔗  Live PR Review  (Azure DevOps)",
 ])
 
@@ -612,26 +612,33 @@ with tab1:
 
 
 # ══════════════════════════════════════════════════════════════════════
-# TAB 2 — SECURITY LOOP
+# TAB 2 — SECURITY LOOP  (WATCHTOWER → BULWARK → FORGE → STEWARD)
 # ══════════════════════════════════════════════════════════════════════
 with tab2:
-    st.markdown("### BULWARK — Security Finding Triage Agent")
+    st.markdown("### Security Loop — Full 4-Agent Pipeline")
     st.markdown(
-        "Describe a Fortify finding or paste a vulnerability description below. "
-        "BULWARK will classify it, assess the attack scenario, and generate a secure fix."
+        "**WATCHTOWER** discovers the finding → **BULWARK** triages it → "
+        "**FORGE** creates a draft fix PR → **STEWARD** writes the audit log entry."
     )
 
     col_l, col_r = st.columns([1, 1])
 
     with col_l:
+        # ── WATCHTOWER (simulated input) ─────────────────────────────
+        st.markdown("#### WATCHTOWER — Finding Input")
+        st.caption(
+            "In production WATCHTOWER polls Fortify SSC on a schedule and publishes "
+            "findings to Azure Service Bus. Here you provide the finding manually."
+        )
+
         if st.button("📂 Load Sample Finding", key="load_finding"):
             st.session_state["finding_input"] = load_sample("fortify_finding.txt")
             st.session_state["code_input_sec"] = ""
 
         finding_input = st.text_area(
-            "Vulnerability / Fortify Finding Description",
+            "Fortify Finding Description",
             value=st.session_state.get("finding_input", ""),
-            height=200,
+            height=180,
             key="finding_area",
             placeholder="Paste the Fortify finding description or describe the vulnerability..."
         )
@@ -639,189 +646,443 @@ with tab2:
         code_sec = st.text_area(
             "Vulnerable Code Snippet (optional)",
             value=st.session_state.get("code_input_sec", ""),
-            height=180,
+            height=150,
             key="code_sec_area",
             placeholder="Paste the vulnerable code here for a more precise fix..."
         )
 
-        run_triage = st.button("🔒 Run Triage", type="primary", key="run_triage")
+        affected_file = st.text_input(
+            "Affected File (optional)",
+            value="OrdersController.cs",
+            key="affected_file",
+            placeholder="e.g. OrdersController.cs"
+        )
+
+        # ── Agent pipeline status ────────────────────────────────────
+        st.markdown("#### Agent Pipeline")
+        st_watchtower = st.empty()
+        st_bulwark    = st.empty()
+        st_forge      = st.empty()
+        st_steward    = st.empty()
+
+        st_watchtower.markdown("⬜ WATCHTOWER — waiting")
+        st_bulwark.markdown("⬜ BULWARK — waiting")
+        st_forge.markdown("⬜ FORGE — waiting")
+        st_steward.markdown("⬜ STEWARD — waiting")
+
+        run_triage = st.button("🔒 Run Security Pipeline", type="primary", key="run_triage")
 
     with col_r:
         if run_triage:
-            if not os.getenv("ANTHROPIC_API_KEY"):
-                st.error("Please enter your Anthropic API key in the sidebar.")
+            from utils.llm_client import get_active_provider
+            if get_active_provider() == "none":
+                st.error("No AI provider configured. Enter credentials in the sidebar.")
             elif not finding_input.strip():
                 st.warning("Please describe the finding first.")
             else:
                 from agents.bulwark import triage_finding
+                from agents.forge   import create_fix_pr
+                from agents.steward import create_audit_entry
 
-                with st.spinner("🤖 BULWARK is triaging the finding..."):
-                    result = triage_finding(finding_input, code_sec)
+                # ── WATCHTOWER ───────────────────────────────────────
+                st_watchtower.markdown("✅ WATCHTOWER — finding received from Fortify")
+                st.markdown(
+                    "<div style='background:#1a2a1a;border-left:3px solid #28A745;"
+                    "padding:8px 14px;border-radius:4px;margin-bottom:12px'>"
+                    "<small style='color:#28A745;font-weight:bold'>WATCHTOWER</small><br>"
+                    "<span style='color:#ccc'>1 new finding published to Service Bus → BULWARK picked up</span>"
+                    "</div>",
+                    unsafe_allow_html=True
+                )
 
-                classification = result.get("classification", "NEEDS_REVIEW")
-                confidence = result.get("confidence", 0.0)
+                # ── BULWARK ──────────────────────────────────────────
+                st_bulwark.markdown("🔄 BULWARK — triaging...")
+                bulwark_result = triage_finding(finding_input, code_sec)
+                st_bulwark.markdown("✅ BULWARK — triage complete")
 
-                # ── Classification header ────────────────────────────
-                st.markdown("#### BULWARK Triage Result")
+                classification = bulwark_result.get("classification", "NEEDS_REVIEW")
+                confidence     = bulwark_result.get("confidence", 0.0)
+                owasp          = bulwark_result.get("owasp_category", "")
+
+                st.markdown("#### BULWARK — Triage Result")
                 st.markdown(
                     f"**Classification:** {classification_badge(classification)}",
                     unsafe_allow_html=True
                 )
+                st.markdown(confidence_bar(confidence), unsafe_allow_html=True)
+                st.divider()
+
+                if owasp:
+                    st.markdown(f"**OWASP Category:** `{owasp}`")
+                if bulwark_result.get("attack_scenario"):
+                    st.markdown("**Attack Scenario:**")
+                    st.warning(bulwark_result["attack_scenario"])
+                if bulwark_result.get("affected_systems"):
+                    st.markdown(f"**At Risk:** {bulwark_result['affected_systems']}")
+                if classification == "FALSE_POSITIVE" and bulwark_result.get("false_positive_reason"):
+                    st.success(f"**Why False Positive:** {bulwark_result['false_positive_reason']}")
+                if bulwark_result.get("recommendation"):
+                    st.info(bulwark_result["recommendation"])
+
+                secure_fix = bulwark_result.get("secure_code_example", "")
+                if secure_fix:
+                    st.markdown("**Secure Code Fix:**")
+                    st.code(secure_fix, language="csharp")
+
+                st.divider()
+
+                # ── FORGE — only for CRITICAL or HIGH ────────────────
+                if classification in ("CRITICAL", "HIGH"):
+                    st_forge.markdown("🔄 FORGE — creating draft PR...")
+                    forge_result = create_fix_pr(
+                        finding_description=finding_input,
+                        classification=classification,
+                        owasp_category=owasp,
+                        secure_code_fix=secure_fix,
+                        affected_file=affected_file,
+                    )
+                    st_forge.markdown("✅ FORGE — draft PR ready")
+
+                    st.markdown("#### FORGE — Draft Pull Request")
+                    st.markdown(
+                        f"<div style='background:#1a1a2e;border-radius:8px;padding:14px 18px'>"
+                        f"<div style='color:#aaa;font-size:0.8rem'>Branch</div>"
+                        f"<div style='color:#4A9EFF;font-family:monospace'>{forge_result.get('branch_name','')}</div>"
+                        f"<div style='color:#aaa;font-size:0.8rem;margin-top:8px'>Commit Message</div>"
+                        f"<div style='color:#ccc;font-family:monospace;font-size:0.9rem'>{forge_result.get('commit_message','')}</div>"
+                        f"<div style='color:#aaa;font-size:0.8rem;margin-top:8px'>PR Title</div>"
+                        f"<div style='color:#fff;font-weight:bold'>{forge_result.get('pr_title','')}</div>"
+                        f"</div>",
+                        unsafe_allow_html=True
+                    )
+
+                    if forge_result.get("pr_description"):
+                        with st.expander("PR Description (Markdown preview)"):
+                            st.markdown(forge_result["pr_description"])
+
+                    if forge_result.get("files_to_modify"):
+                        st.markdown(f"**Files to modify:** `{'`, `'.join(forge_result['files_to_modify'])}`")
+
+                    if forge_result.get("reviewer_note"):
+                        st.info(f"**Reviewer Note:** {forge_result['reviewer_note']}")
+
+                    st.markdown(
+                        "<div style='background:#2a1a1a;border-left:3px solid #FFA500;"
+                        "padding:8px 14px;border-radius:4px'>"
+                        "<small style='color:#FFA500;font-weight:bold'>DRAFT PR — Human Approval Required</small><br>"
+                        "<span style='color:#ccc'>FORGE never merges code. The developer reviews and approves this draft before anything is merged.</span>"
+                        "</div>",
+                        unsafe_allow_html=True
+                    )
+
+                    st.divider()
+                else:
+                    st_forge.markdown(
+                        f"⏭️ FORGE — skipped (classification is {classification}, not CRITICAL/HIGH)"
+                    )
+
+                # ── STEWARD ──────────────────────────────────────────
+                st_steward.markdown("🔄 STEWARD — writing audit log...")
+                action = (
+                    f"FORGE created draft PR: {forge_result.get('branch_name','N/A')}"
+                    if classification in ("CRITICAL", "HIGH") and "forge_result" in dir()
+                    else f"BULWARK classified as {classification} — no FORGE action required"
+                )
+                audit_entry = create_audit_entry(
+                    pipeline          = "Security Loop",
+                    finding_summary   = finding_input,
+                    classification    = classification,
+                    confidence        = confidence,
+                    action_taken      = action,
+                    agents_involved   = ["WATCHTOWER", "BULWARK", "FORGE", "STEWARD"]
+                    if classification in ("CRITICAL", "HIGH")
+                    else ["WATCHTOWER", "BULWARK", "STEWARD"],
+                    human_gate_required = classification in ("CRITICAL", "HIGH"),
+                )
+                st_steward.markdown("✅ STEWARD — audit entry written")
+
+                st.markdown("#### STEWARD — Audit Log Entry")
                 st.markdown(
-                    confidence_bar(confidence),
+                    "<div style='background:#111;border:1px solid #333;border-radius:8px;"
+                    "padding:14px 18px;font-family:monospace;font-size:0.82rem'>"
+                    + "<br>".join(
+                        f"<span style='color:#555'>{k}:</span> "
+                        f"<span style='color:#a8d8a8'>{v}</span>"
+                        for k, v in audit_entry.items()
+                    )
+                    + "</div>",
                     unsafe_allow_html=True
                 )
-
-                st.divider()
-
-                # ── OWASP ────────────────────────────────────────────
-                if result.get("owasp_category"):
-                    st.markdown(f"**OWASP Category:** `{result['owasp_category']}`")
-
-                # ── Attack scenario ──────────────────────────────────
-                if result.get("attack_scenario"):
-                    st.markdown("**⚠️ Attack Scenario:**")
-                    st.warning(result["attack_scenario"])
-
-                if result.get("affected_systems"):
-                    st.markdown(f"**🎯 At Risk:** {result['affected_systems']}")
-
-                # ── False positive ───────────────────────────────────
-                if classification == "FALSE_POSITIVE" and result.get("false_positive_reason"):
-                    st.success(f"**Why this is a False Positive:** {result['false_positive_reason']}")
-
-                st.divider()
-
-                # ── Recommendation & fix ─────────────────────────────
-                if result.get("recommendation"):
-                    st.markdown("**✅ Recommendation:**")
-                    st.info(result["recommendation"])
-
-                if result.get("secure_code_example"):
-                    st.markdown("**🔧 Secure Code Fix (FORGE preview):**")
-                    st.code(result["secure_code_example"], language="csharp")
+                st.caption("In production this entry is written to Azure Blob Storage (immutable, 7-year retention).")
 
         else:
-            st.info("👈 Load a sample finding or describe the vulnerability, then click **Run Triage**.")
+            st.info("👈 Load a sample finding or describe the vulnerability, then click **Run Security Pipeline**.")
 
 
 # ══════════════════════════════════════════════════════════════════════
-# TAB 3 — CERTIFICATE LOOP
+# TAB 3 — CERTIFICATE LOOP  (REGENT → TIMELINE → COURIER → HARBOUR)
 # ══════════════════════════════════════════════════════════════════════
 with tab3:
-    st.markdown("### TIMELINE — Certificate Expiry & Renewal Analyser")
+    st.markdown("### Certificate Loop — Full 4-Agent Pipeline")
     st.markdown(
-        "Enter certificate details below. TIMELINE will assess urgency, "
-        "identify the renewal path, and generate a step-by-step action plan."
+        "**REGENT** manages the inventory → **TIMELINE** analyses expiry → "
+        "**COURIER** requests renewal from the CA → **HARBOUR** deploys and awaits Prod approval."
     )
 
+    # ── REGENT — Inventory ───────────────────────────────────────────
+    from agents.regent import get_inventory, get_cert_by_name
+
+    st.markdown("#### REGENT — Certificate Inventory")
+    st.caption("In production REGENT reads from Azure Key Vault + Azure Table Storage. POC uses a sample inventory.")
+
+    inventory = get_inventory()
+
+    status_colours = {
+        "EXPIRED":        "#FF0000",
+        "CRITICAL":       "#FF4B4B",
+        "URGENT":         "#FF8C00",
+        "RENEWAL_NEEDED": "#FFA500",
+        "MONITOR":        "#1E90FF",
+        "OK":             "#28A745",
+    }
+
+    inv_cols = st.columns([3, 2, 1, 2, 2])
+    inv_cols[0].markdown("**Certificate**")
+    inv_cols[1].markdown("**Expiry**")
+    inv_cols[2].markdown("**Days**")
+    inv_cols[3].markdown("**Status**")
+    inv_cols[4].markdown("**Owner**")
+
+    for cert in inventory:
+        c = st.columns([3, 2, 1, 2, 2])
+        c[0].markdown(f"`{cert['name']}`")
+        c[1].markdown(cert["expiry_date"])
+        days_val = cert["days_remaining"]
+        days_col = status_colours.get(cert["status"], "#888")
+        c[2].markdown(
+            f"<span style='color:{days_col};font-weight:bold'>{days_val}</span>",
+            unsafe_allow_html=True
+        )
+        c[3].markdown(
+            f"<span style='background:{days_col};color:white;padding:2px 8px;"
+            f"border-radius:4px;font-size:0.78rem;font-weight:bold'>{cert['status']}</span>",
+            unsafe_allow_html=True
+        )
+        c[4].markdown(cert["owner"])
+
+    st.divider()
+
+    # ── Select cert to run pipeline on ──────────────────────────────
     col_a, col_b = st.columns([1, 1])
 
     with col_a:
-        if st.button("📂 Load Sample Certificate", key="load_cert"):
-            st.session_state["cert_subject"]  = "api.core-main.internal"
-            st.session_state["cert_expiry"]   = "2026-05-01"
-            st.session_state["cert_envs"]     = "Dev, QA, Production (IIS)"
-            st.session_state["cert_ca"]       = "Internal PKI (C&M Portal)"
-            st.session_state["cert_notes"]    = "Used by the Payments API and Admin Portal. Wildcard cert covers *.core-main.internal"
+        cert_names = [c["name"] for c in inventory]
+        selected_cert_name = st.selectbox(
+            "Select Certificate to Analyse",
+            cert_names,
+            key="selected_cert"
+        )
+        selected_cert = get_cert_by_name(selected_cert_name)
 
-        cert_subject = st.text_input(
-            "Subject / Domain",
-            value=st.session_state.get("cert_subject", ""),
-            placeholder="e.g. api.core-main.internal or *.example.com"
-        )
-        cert_expiry = st.text_input(
-            "Expiry Date (YYYY-MM-DD)",
-            value=st.session_state.get("cert_expiry", ""),
-            placeholder="e.g. 2026-05-15"
-        )
-        cert_envs = st.text_input(
-            "Deployed Environments",
-            value=st.session_state.get("cert_envs", ""),
-            placeholder="e.g. Dev, QA, Production (IIS + App Service)"
-        )
-        cert_ca = st.selectbox(
-            "Certificate Authority Type",
-            ["Internal PKI (C&M Portal)", "DigiCert", "GlobalSign", "Let's Encrypt", "Other"],
-            index=0
-        )
-        cert_notes = st.text_area(
-            "Additional Notes (optional)",
-            value=st.session_state.get("cert_notes", ""),
-            height=100,
-            placeholder="e.g. Wildcard cert, used by 3 IIS sites, owner is Pankaj Pathak"
-        )
+        if selected_cert:
+            st.markdown(
+                f"**CA:** {selected_cert['ca_type']}  \n"
+                f"**Environments:** {', '.join(selected_cert['environments'])}  \n"
+                f"**Targets:** {', '.join(selected_cert['deployment_targets'])}"
+            )
 
-        run_cert = st.button("📜 Analyse Certificate", type="primary", key="run_cert")
+        # ── Agent pipeline status ────────────────────────────────────
+        st.markdown("#### Agent Pipeline")
+        st_regent   = st.empty()
+        st_timeline = st.empty()
+        st_courier  = st.empty()
+        st_harbour  = st.empty()
+
+        st_regent.markdown("⬜ REGENT — waiting")
+        st_timeline.markdown("⬜ TIMELINE — waiting")
+        st_courier.markdown("⬜ COURIER — waiting")
+        st_harbour.markdown("⬜ HARBOUR — waiting")
+
+        run_cert = st.button("📜 Run Certificate Pipeline", type="primary", key="run_cert")
 
     with col_b:
-        if run_cert:
-            if not os.getenv("ANTHROPIC_API_KEY"):
-                st.error("Please enter your Anthropic API key in the sidebar.")
-            elif not cert_subject.strip() or not cert_expiry.strip():
-                st.warning("Please fill in Subject and Expiry Date.")
+        if run_cert and selected_cert:
+            from utils.llm_client import get_active_provider
+            if get_active_provider() == "none":
+                st.error("No AI provider configured. Enter credentials in the sidebar.")
             else:
                 from agents.timeline import analyse_certificate
+                from agents.courier  import request_certificate
+                from agents.harbour  import deploy_certificate
 
-                with st.spinner("🤖 TIMELINE is analysing the certificate..."):
-                    result = analyse_certificate(
-                        subject=cert_subject,
-                        expiry_date=cert_expiry,
-                        environments=cert_envs,
-                        ca_type=cert_ca,
-                        notes=cert_notes
-                    )
-
-                urgency = result.get("urgency", "MONITOR")
-                days    = result.get("days_until_expiry", "?")
-
-                # ── Urgency header ───────────────────────────────────
-                st.markdown("#### TIMELINE Analysis")
+                # ── REGENT ───────────────────────────────────────────
+                st_regent.markdown("✅ REGENT — certificate retrieved from inventory")
                 st.markdown(
-                    f"**Urgency:** {urgency_badge(urgency)}  &nbsp;&nbsp; "
-                    f"**Days Until Expiry:** <span style='font-size:1.3rem;font-weight:bold'>{days}</span>",
+                    f"<div style='background:#1a2a1a;border-left:3px solid #28A745;"
+                    f"padding:8px 14px;border-radius:4px;margin-bottom:12px'>"
+                    f"<small style='color:#28A745;font-weight:bold'>REGENT</small><br>"
+                    f"<span style='color:#ccc'>Retrieved <code>{selected_cert['name']}</code> — "
+                    f"{selected_cert['days_remaining']} days remaining — published to pipeline</span>"
+                    f"</div>",
                     unsafe_allow_html=True
                 )
 
-                if result.get("summary"):
-                    st.markdown(f"*{result['summary']}*")
+                # ── TIMELINE ─────────────────────────────────────────
+                st_timeline.markdown("🔄 TIMELINE — analysing...")
+                timeline_result = analyse_certificate(
+                    subject      = selected_cert["subject"],
+                    expiry_date  = selected_cert["expiry_date"],
+                    environments = ", ".join(selected_cert["environments"]),
+                    ca_type      = selected_cert["ca_type"],
+                )
+                st_timeline.markdown("✅ TIMELINE — analysis complete")
 
-                st.divider()
+                urgency = timeline_result.get("urgency", "MONITOR")
+                days    = timeline_result.get("days_until_expiry", "?")
 
-                # ── Renewal path ─────────────────────────────────────
-                renewal_path = result.get("renewal_path", "unknown")
-                path_icons = {
-                    "internal_pki":  "🏢",
-                    "external_ca":   "🌐",
-                    "letsencrypt":   "🔒",
-                    "unknown":       "❓"
-                }
-                st.markdown(f"**Renewal Path:** {path_icons.get(renewal_path, '❓')} `{renewal_path.replace('_',' ').title()}`")
+                st.markdown("#### TIMELINE — Expiry Analysis")
+                st.markdown(
+                    f"**Urgency:** {urgency_badge(urgency)}  &nbsp;&nbsp; "
+                    f"**Days Remaining:** <span style='font-size:1.3rem;font-weight:bold'>{days}</span>",
+                    unsafe_allow_html=True
+                )
+                if timeline_result.get("summary"):
+                    st.markdown(f"*{timeline_result['summary']}*")
 
-                auto = result.get("automation_possible", False)
-                st.markdown(f"**Automation Possible:** {'✅ Yes' if auto else '⚠️ Partial / Manual steps required'}")
-                if result.get("automation_notes"):
-                    st.caption(result["automation_notes"])
+                renewal_path = timeline_result.get("renewal_path", "unknown")
+                path_icons   = {"internal_pki": "🏢", "external_ca": "🌐", "letsencrypt": "🔒", "unknown": "❓"}
+                st.markdown(f"**Renewal Path:** {path_icons.get(renewal_path,'❓')} `{renewal_path.replace('_',' ').title()}`")
 
-                st.divider()
-
-                # ── Action plan ──────────────────────────────────────
-                steps = result.get("action_plan", [])
+                steps = timeline_result.get("action_plan", [])
                 if steps:
-                    st.markdown("**📋 Action Plan:**")
-                    for i, step in enumerate(steps, 1):
-                        st.markdown(f"{i}. {step}")
+                    with st.expander("TIMELINE Action Plan"):
+                        for i, step in enumerate(steps, 1):
+                            st.markdown(f"{i}. {step}")
 
-                # ── Risks ────────────────────────────────────────────
-                risks = result.get("risks", [])
-                if risks:
+                risks = timeline_result.get("risks", [])
+                for r in risks:
+                    st.warning(r)
+
+                st.divider()
+
+                # ── COURIER — only for actionable urgency ────────────
+                trigger_statuses = {"EXPIRED", "CRITICAL", "URGENT", "RENEWAL_NEEDED"}
+                if urgency in trigger_statuses:
+                    st_courier.markdown("🔄 COURIER — requesting renewal from CA...")
+                    courier_result = request_certificate(
+                        subject        = selected_cert["subject"],
+                        ca_type        = selected_cert["ca_type"],
+                        environments   = ", ".join(selected_cert["environments"]),
+                        days_remaining = selected_cert["days_remaining"],
+                    )
+                    st_courier.markdown("✅ COURIER — certificate renewal requested")
+
+                    st.markdown("#### COURIER — CA Renewal Request")
+                    st.markdown(
+                        f"<div style='background:#1a1a2e;border-radius:8px;padding:14px 18px'>"
+                        f"<div style='color:#aaa;font-size:0.8rem'>Request</div>"
+                        f"<div style='color:#ccc'>{courier_result.get('request_summary','')}</div>"
+                        f"<div style='display:flex;gap:24px;margin-top:10px;flex-wrap:wrap'>"
+                        f"<div><div style='color:#aaa;font-size:0.75rem'>Order ID</div>"
+                        f"<div style='color:#4A9EFF;font-family:monospace'>{courier_result.get('ca_order_id','')}</div></div>"
+                        f"<div><div style='color:#aaa;font-size:0.75rem'>Validation</div>"
+                        f"<div style='color:#ccc'>{courier_result.get('validation_method','')}</div></div>"
+                        f"<div><div style='color:#aaa;font-size:0.75rem'>Delivery</div>"
+                        f"<div style='color:#ccc'>{courier_result.get('estimated_delivery','')}</div></div>"
+                        f"<div><div style='color:#aaa;font-size:0.75rem'>Format</div>"
+                        f"<div style='color:#ccc'>{courier_result.get('cert_format','PFX')}</div></div>"
+                        f"</div>"
+                        f"</div>",
+                        unsafe_allow_html=True
+                    )
+
+                    if courier_result.get("simulated_thumbprint"):
+                        st.markdown(
+                            f"**New Cert Thumbprint:** "
+                            f"`{courier_result['simulated_thumbprint'][:32]}...`"
+                        )
+
+                    st.caption(courier_result.get("simulation_note", ""))
                     st.divider()
-                    st.markdown("**⚠️ Risks to be aware of:**")
-                    for r in risks:
-                        st.warning(r)
 
+                    # ── HARBOUR ──────────────────────────────────────
+                    st_harbour.markdown("🔄 HARBOUR — generating deployment plan...")
+                    harbour_result = deploy_certificate(
+                        subject                 = selected_cert["subject"],
+                        ca_type                 = selected_cert["ca_type"],
+                        environments            = selected_cert["environments"],
+                        deployment_targets      = selected_cert["deployment_targets"],
+                        cert_thumbprint         = courier_result.get("simulated_thumbprint", "SIMULATED"),
+                        days_remaining_old_cert = selected_cert["days_remaining"],
+                    )
+                    st_harbour.markdown("✅ HARBOUR — Dev & QA deployed · Prod awaiting approval")
+
+                    st.markdown("#### HARBOUR — Deployment Plan")
+
+                    for env_plan in harbour_result.get("deployment_plan", []):
+                        env_name = env_plan.get("environment", "")
+                        status   = env_plan.get("status", "")
+                        is_prod  = env_name == "Production"
+                        bg       = "#2a1a1a" if is_prod else "#1a2a1a"
+                        border   = "#FFA500" if is_prod else "#28A745"
+                        status_label = "⏳ Awaiting Approval" if is_prod else "✅ Simulated Success"
+
+                        st.markdown(
+                            f"<div style='background:{bg};border-left:3px solid {border};"
+                            f"padding:10px 14px;border-radius:4px;margin-bottom:8px'>"
+                            f"<strong style='color:#fff'>{env_name}</strong> — "
+                            f"<span style='color:#aaa'>{env_plan.get('target','')}</span> "
+                            f"<span style='float:right'>{status_label}</span>"
+                            f"</div>",
+                            unsafe_allow_html=True
+                        )
+
+                        cmds = env_plan.get("commands", [])
+                        if cmds:
+                            with st.expander(f"Commands — {env_name}"):
+                                st.code("\n".join(cmds), language="powershell")
+
+                        if env_plan.get("https_verification"):
+                            st.caption(f"Verify: `{env_plan['https_verification']}`")
+
+                    # ── Teams approval card ───────────────────────────
+                    teams_card = harbour_result.get("teams_approval_card", {})
+                    if teams_card:
+                        st.divider()
+                        st.markdown("#### Teams Approval Card — Sent to Channel")
+                        st.markdown(
+                            f"<div style='background:#1f1f3a;border:1px solid #4A9EFF;"
+                            f"border-radius:10px;padding:18px 20px'>"
+                            f"<div style='color:#4A9EFF;font-size:1.1rem;font-weight:bold;margin-bottom:8px'>"
+                            f"{teams_card.get('title','')}</div>"
+                            f"<div style='color:#ccc;margin-bottom:12px'>{teams_card.get('body','')}</div>"
+                            f"<div style='display:flex;gap:10px'>"
+                            f"<div style='background:#28A745;color:white;padding:6px 16px;"
+                            f"border-radius:6px;font-weight:bold'>{teams_card.get('approve_action','Approve')}</div>"
+                            f"<div style='background:#555;color:white;padding:6px 16px;"
+                            f"border-radius:6px'>{teams_card.get('reject_action','Hold')}</div>"
+                            f"</div></div>",
+                            unsafe_allow_html=True
+                        )
+                        st.markdown(
+                            "<div style='background:#2a1a1a;border-left:3px solid #FFA500;"
+                            "padding:8px 14px;border-radius:4px;margin-top:8px'>"
+                            "<small style='color:#FFA500;font-weight:bold'>PRODUCTION GATE — Human Approval Required</small><br>"
+                            "<span style='color:#ccc'>HARBOUR will not deploy to Production until a human clicks Approve in Teams.</span>"
+                            "</div>",
+                            unsafe_allow_html=True
+                        )
+                        st.caption(harbour_result.get("simulation_note", ""))
+
+                else:
+                    st_courier.markdown(f"⏭️ COURIER — skipped (urgency is {urgency}, no renewal needed yet)")
+                    st_harbour.markdown("⏭️ HARBOUR — skipped (no new certificate to deploy)")
+                    st.info(f"Certificate urgency is **{urgency}** — no renewal action required at this time. TIMELINE will monitor and trigger COURIER when it reaches RENEWAL_NEEDED.")
+
+        elif run_cert and not selected_cert:
+            st.warning("Could not load selected certificate from inventory.")
         else:
-            st.info("👈 Load a sample certificate or fill in the details, then click **Analyse Certificate**.")
+            st.info("👈 Select a certificate from the inventory above, then click **Run Certificate Pipeline**.")
 
 # ══════════════════════════════════════════════════════════════════════
 # TAB 4 — LIVE PR REVIEW (Azure DevOps)
