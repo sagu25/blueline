@@ -157,18 +157,53 @@ This is an important question. GitHub Copilot and BlueLine are solving different
 
 ---
 
-### On "Spec Kit"
+### On GitHub Spec Kit — What It Actually Is
 
-If the question is about GitHub Copilot for Pull Requests (which can auto-summarise PRs) — BlueLine goes significantly further. Copilot PR summaries describe what changed. BlueLine's ASCENT tells you whether to approve, block, or request changes, what the biggest risk is, and exactly what the reviewer needs to manually verify. It is a decision, not a description.
+GitHub Spec Kit is an open-source toolkit (released by GitHub in late 2025, 80,000+ stars) that promotes **Spec-Driven Development** — the idea of writing a detailed specification before writing any code, then using AI agents to implement it against that spec.
 
-If the question is about GitHub Advanced Security (GHAS / code scanning) — that is closer to Fortify, not to BlueLine. GHAS scans code for vulnerabilities but still leaves the triage, investigation, and fix to a human. BULWARK and FORGE automate that middle layer.
+**How Spec Kit works — 4 phases:**
+1. **Specify** — You describe what you want to build. AI drafts a detailed spec document
+2. **Plan** — You declare architecture and constraints. AI proposes a technical plan
+3. **Tasks** — AI breaks the plan into small, reviewable implementation units
+4. **Implement** — AI agents (Copilot, Claude Code, Gemini) implement each task
+
+It creates `.github` and `.specify` folders in your project with templates, prompts, and a CLI called `Specify`. It works with 24+ AI coding agents.
+
+**The key difference from BlueLine:**
+
+Spec Kit and BlueLine are solving completely different problems and are not alternatives to each other.
+
+| | GitHub Spec Kit | BlueLine |
+|---|---|---|
+| **What it does** | Helps you build new features and projects with AI | Automatically reviews, secures, and manages existing code and infrastructure |
+| **When it runs** | Developer triggers it manually when starting new work | Runs automatically in the background on everything the team builds |
+| **Who uses it** | Individual developer building something new | Entire engineering pipeline — no one needs to trigger it |
+| **Scope** | Greenfield development workflow | PR reviews, security triage, certificate management — ongoing operations |
+| **ADO integration** | None | Native — posts comments, creates branches, opens PRs |
+| **Fortify / Security** | None | WATCHTOWER + BULWARK + FORGE full pipeline |
+| **Certificate management** | None | Full REGENT → TIMELINE → COURIER → HARBOUR pipeline |
+| **Audit trail** | None | STEWARD — immutable log for every agent action |
+
+**The one-line answer if they ask:**
+
+> *"GitHub Spec Kit helps a developer plan and build something new using AI. BlueLine runs automatically on everything your team builds — it does not need a developer to ask it anything. They solve different problems and can coexist."*
 
 ---
 
-### The One-Line Answer
+### On GitHub Copilot PR Summaries
 
-> *"Copilot makes individual developers faster. BlueLine makes the entire engineering process more consistent, more secure, and more automated — without any developer having to remember to use it."*
+If the question is about GitHub Copilot for Pull Requests — Copilot PR summaries describe what changed. BlueLine's ASCENT tells you whether to approve, block, or request changes, what the biggest risk is, and exactly what the reviewer must manually verify. Copilot gives you a description. ASCENT gives you a decision.
+
+### On GitHub Advanced Security (GHAS)
+
+GHAS is closer to Fortify — it scans code for vulnerabilities but leaves triage, investigation, and fix to a human. BULWARK and FORGE automate that entire middle layer — classify, assess impact, generate fix, create PR.
 
 ---
 
-*End of Key Questions Document — Version 1.0*
+### The One-Line Answer for the Whole Question
+
+> *"Copilot and Spec Kit make individual developers faster when they choose to use them. BlueLine makes the entire engineering process more consistent, more secure, and more automated — without any developer having to remember to use it."*
+
+---
+
+*End of Key Questions Document — Version 1.1*
