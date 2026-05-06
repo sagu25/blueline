@@ -30,6 +30,11 @@ IMG_*.png
 Thumbs.db
 desktop.ini
 
+# ── Node / React ──
+node_modules/
+poc/frontend/dist/
+poc/frontend/.vite/
+
 # ── IDE ──
 .vscode/
 .idea/
