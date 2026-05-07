@@ -56,7 +56,7 @@ Respond with valid JSON only:
 {
   "recommendation": "APPROVE" | "REQUEST_CHANGES" | "BLOCK",
   "summary": "one paragraph plain English summary",
-  "overall_score": <integer 1-10>,
+  "overall_score": <integer between 1 and 10 — NEVER use 0. 1 = very poor quality, 10 = excellent. Most reviewed code scores between 3 and 8.>,
   "tier1_must_fix": [
     { "source": "CLARION|LUMEN|VECTOR", "issue": "description", "action": "what to do" }
   ],
@@ -130,7 +130,14 @@ Produce the consolidated review JSON as described. No extra text.
     clean = clean.strip()
 
     try:
-        return json.loads(clean)
+        result = json.loads(clean)
+        # Clamp score — LLM occasionally returns 0 despite the 1-10 instruction
+        raw = result.get("overall_score")
+        try:
+            result["overall_score"] = max(1, min(10, int(raw))) if raw else None
+        except (TypeError, ValueError):
+            result["overall_score"] = None
+        return result
     except json.JSONDecodeError:
         return {
             "recommendation": "REQUEST_CHANGES",
