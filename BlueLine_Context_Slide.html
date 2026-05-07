@@ -2,384 +2,140 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Project BlueLine — Overview</title>
+  <title>Project BlueLine</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
       background: #060b14;
       color: #e2e8f0;
-      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      font-family: 'Segoe UI', system-ui, sans-serif;
       height: 100vh;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 40px;
-      overflow: hidden;
+      padding: 60px;
     }
 
-    /* ── Header ── */
+    /* Header */
     .header {
       text-align: center;
-      margin-bottom: 48px;
+      margin-bottom: 64px;
     }
 
-    .logo-row {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 14px;
-      margin-bottom: 12px;
-    }
-
-    .logo-dot {
-      width: 44px;
-      height: 44px;
-      border-radius: 12px;
-      background: linear-gradient(135deg, #4A9EFF, #1a6fd4);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 900;
-      font-size: 16px;
-      color: white;
-      letter-spacing: -0.5px;
-      box-shadow: 0 0 24px rgba(74,158,255,0.4);
-    }
-
-    .project-title {
-      font-size: 36px;
+    .title {
+      font-size: 42px;
       font-weight: 800;
-      color: #ffffff;
-      letter-spacing: -0.5px;
+      color: #fff;
     }
 
-    .project-title span {
-      color: #4A9EFF;
-    }
+    .title span { color: #4A9EFF; }
 
-    .subtitle {
+    .sub {
       font-size: 15px;
-      color: #64748b;
-      letter-spacing: 0.08em;
+      color: #475569;
+      margin-top: 10px;
+      letter-spacing: 0.06em;
       text-transform: uppercase;
-      font-weight: 500;
     }
 
-    /* ── Divider ── */
-    .divider {
-      width: 60px;
-      height: 3px;
-      background: linear-gradient(90deg, #4A9EFF, transparent);
-      border-radius: 2px;
-      margin: 14px auto 0;
-    }
-
-    /* ── Cards Grid ── */
+    /* Cards */
     .cards {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      gap: 24px;
+      gap: 28px;
       width: 100%;
-      max-width: 1200px;
+      max-width: 1000px;
     }
 
     .card {
-      border-radius: 20px;
-      padding: 36px 32px;
-      border: 1px solid;
-      position: relative;
-      overflow: hidden;
-      transition: transform 0.2s;
-    }
-
-    .card::before {
-      content: '';
-      position: absolute;
-      top: 0; left: 0; right: 0;
-      height: 3px;
-      border-radius: 20px 20px 0 0;
-    }
-
-    /* Quality Gate — Blue */
-    .card-quality {
-      background: linear-gradient(145deg, #0d1e35, #0a1628);
-      border-color: #1a3a5c;
-      box-shadow: 0 0 40px rgba(74,158,255,0.08);
-    }
-    .card-quality::before { background: linear-gradient(90deg, #4A9EFF, #1a6fd4); }
-
-    /* Security Loop — Red/Orange */
-    .card-security {
-      background: linear-gradient(145deg, #1f0d0d, #180a0a);
-      border-color: #4a1a1a;
-      box-shadow: 0 0 40px rgba(239,68,68,0.08);
-    }
-    .card-security::before { background: linear-gradient(90deg, #ef4444, #b91c1c); }
-
-    /* Certificate Loop — Green */
-    .card-cert {
-      background: linear-gradient(145deg, #0d1f14, #091610);
-      border-color: #1a4a2a;
-      box-shadow: 0 0 40px rgba(34,197,94,0.08);
-    }
-    .card-cert::before { background: linear-gradient(90deg, #22c55e, #15803d); }
-
-    /* ── Card Icon ── */
-    .card-icon {
-      width: 56px;
-      height: 56px;
-      border-radius: 14px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 26px;
-      margin-bottom: 20px;
-    }
-    .icon-quality  { background: rgba(74,158,255,0.15); border: 1px solid rgba(74,158,255,0.3); }
-    .icon-security { background: rgba(239,68,68,0.15);  border: 1px solid rgba(239,68,68,0.3); }
-    .icon-cert     { background: rgba(34,197,94,0.15);  border: 1px solid rgba(34,197,94,0.3); }
-
-    /* ── Card Title ── */
-    .card-track {
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-      margin-bottom: 4px;
-    }
-    .track-quality  { color: #4A9EFF; }
-    .track-security { color: #ef4444; }
-    .track-cert     { color: #22c55e; }
-
-    .card-title {
-      font-size: 22px;
-      font-weight: 800;
-      color: #ffffff;
-      margin-bottom: 8px;
-      line-height: 1.2;
-    }
-
-    .card-tagline {
-      font-size: 13px;
-      color: #64748b;
-      margin-bottom: 24px;
-      line-height: 1.5;
-    }
-
-    /* ── Objectives ── */
-    .objectives {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .objective {
-      display: flex;
-      align-items: flex-start;
-      gap: 12px;
-    }
-
-    .obj-icon {
-      width: 28px;
-      height: 28px;
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 13px;
-      flex-shrink: 0;
-      margin-top: 1px;
-    }
-    .obj-quality  { background: rgba(74,158,255,0.12); }
-    .obj-security { background: rgba(239,68,68,0.12); }
-    .obj-cert     { background: rgba(34,197,94,0.12); }
-
-    .obj-text {
-      font-size: 13.5px;
-      color: #94a3b8;
-      line-height: 1.5;
-    }
-
-    .obj-text strong {
-      color: #cbd5e1;
-      font-weight: 600;
-    }
-
-    /* ── Trigger badge ── */
-    .trigger {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      margin-top: 24px;
-      padding: 6px 12px;
-      border-radius: 20px;
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0.03em;
-    }
-    .trigger-quality  { background: rgba(74,158,255,0.1);  color: #4A9EFF;  border: 1px solid rgba(74,158,255,0.25); }
-    .trigger-security { background: rgba(239,68,68,0.1);   color: #ef4444;  border: 1px solid rgba(239,68,68,0.25); }
-    .trigger-cert     { background: rgba(34,197,94,0.1);   color: #22c55e;  border: 1px solid rgba(34,197,94,0.25); }
-
-    /* ── Footer ── */
-    .footer {
-      margin-top: 40px;
-      display: flex;
-      align-items: center;
-      gap: 32px;
-    }
-
-    .footer-pill {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 18px;
-      border-radius: 20px;
       background: #0d1524;
       border: 1px solid #1a2d45;
-      font-size: 12px;
+      border-radius: 16px;
+      padding: 36px 32px;
+      text-align: center;
+    }
+
+    .emoji { font-size: 36px; margin-bottom: 16px; }
+
+    .card-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 10px;
+    }
+
+    .card-line {
+      width: 32px;
+      height: 3px;
+      border-radius: 2px;
+      margin: 0 auto 16px;
+    }
+    .blue  { background: #4A9EFF; }
+    .red   { background: #ef4444; }
+    .green { background: #22c55e; }
+
+    .card-desc {
+      font-size: 14px;
       color: #64748b;
+      line-height: 1.7;
     }
 
-    .footer-pill .dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: #22c55e;
-      box-shadow: 0 0 6px #22c55e;
-    }
-
-    .footer-divider {
-      width: 1px;
-      height: 16px;
-      background: #1a2d45;
+    /* Footer */
+    .footer {
+      margin-top: 56px;
+      font-size: 13px;
+      color: #334155;
+      letter-spacing: 0.04em;
     }
   </style>
 </head>
 <body>
 
-  <!-- Header -->
   <div class="header">
-    <div class="logo-row">
-      <div class="logo-dot">BL</div>
-      <div class="project-title">Project <span>BlueLine</span></div>
-    </div>
-    <div class="subtitle">AI-Powered Engineering Automation — Core &amp; Main</div>
-    <div class="divider"></div>
+    <div class="title">Project <span>BlueLine</span></div>
+    <div class="sub">AI-Powered Engineering Automation · Core &amp; Main</div>
   </div>
 
-  <!-- Three Cards -->
   <div class="cards">
 
-    <!-- Quality Gate -->
-    <div class="card card-quality">
-      <div class="card-icon icon-quality">🧑‍💻</div>
-      <div class="card-track track-quality">Track 1</div>
+    <div class="card">
+      <div class="emoji">🧑‍💻</div>
       <div class="card-title">Quality Gate</div>
-      <div class="card-tagline">Automated code review on every Pull Request — before a human ever opens the file.</div>
-
-      <div class="objectives">
-        <div class="objective">
-          <div class="obj-icon obj-quality">⚡</div>
-          <div class="obj-text"><strong>Instant review</strong> — all 4 agents run in under 45 seconds on every PR</div>
-        </div>
-        <div class="objective">
-          <div class="obj-icon obj-quality">📋</div>
-          <div class="obj-text"><strong>Standards enforcement</strong> — checks DAS/CDAS rules for C# and Angular automatically</div>
-        </div>
-        <div class="objective">
-          <div class="obj-icon obj-quality">🔍</div>
-          <div class="obj-text"><strong>Risk scoring</strong> — flags hotspots and tells the reviewer exactly where to look</div>
-        </div>
-        <div class="objective">
-          <div class="obj-icon obj-quality">✅</div>
-          <div class="obj-text"><strong>Clear verdict</strong> — APPROVE / REQUEST CHANGES / BLOCK with tiered findings</div>
-        </div>
+      <div class="card-line blue"></div>
+      <div class="card-desc">
+        Automatically reviews every Pull Request the moment it is raised —
+        checks coding standards, detects risks, and gives a clear recommendation
+        before any human reviewer opens the file.
       </div>
-
-      <div class="trigger trigger-quality">⚡ Trigger: PR opened or updated in Azure DevOps</div>
     </div>
 
-    <!-- Security Loop -->
-    <div class="card card-security">
-      <div class="card-icon icon-security">🔒</div>
-      <div class="card-track track-security">Track 2</div>
+    <div class="card">
+      <div class="emoji">🔒</div>
       <div class="card-title">Security Loop</div>
-      <div class="card-tagline">From Fortify finding to a ready-to-merge fix PR — automatically, with full audit trail.</div>
-
-      <div class="objectives">
-        <div class="objective">
-          <div class="obj-icon obj-security">🎯</div>
-          <div class="obj-text"><strong>Auto triage</strong> — classifies every Fortify finding as CRITICAL / HIGH / NEEDS REVIEW / FALSE POSITIVE</div>
-        </div>
-        <div class="objective">
-          <div class="obj-icon obj-security">🛡️</div>
-          <div class="obj-text"><strong>OWASP mapped</strong> — each finding linked to OWASP Top 10 with attack scenario</div>
-        </div>
-        <div class="objective">
-          <div class="obj-icon obj-security">🔧</div>
-          <div class="obj-text"><strong>Fix generated</strong> — FORGE writes the corrected code and raises a draft PR automatically</div>
-        </div>
-        <div class="objective">
-          <div class="obj-icon obj-security">📝</div>
-          <div class="obj-text"><strong>Immutable audit</strong> — every decision logged with 7-year retention for compliance</div>
-        </div>
+      <div class="card-line red"></div>
+      <div class="card-desc">
+        Picks up Fortify security findings, triages them by severity,
+        and generates a ready-to-review fix Pull Request —
+        automatically, with a full audit trail.
       </div>
-
-      <div class="trigger trigger-security">⚡ Trigger: Fortify SSC scan completes</div>
     </div>
 
-    <!-- Certificate Loop -->
-    <div class="card card-cert">
-      <div class="card-icon icon-cert">📜</div>
-      <div class="card-track track-cert">Track 3</div>
+    <div class="card">
+      <div class="emoji">📜</div>
       <div class="card-title">Certificate Loop</div>
-      <div class="card-tagline">SSL/TLS certificates monitored, renewed, and deployed — no spreadsheets, no surprise expiries.</div>
-
-      <div class="objectives">
-        <div class="objective">
-          <div class="obj-icon obj-cert">👁️</div>
-          <div class="obj-text"><strong>Daily monitoring</strong> — checks all certificates every morning, flags expiry up to 90 days ahead</div>
-        </div>
-        <div class="objective">
-          <div class="obj-icon obj-cert">🔄</div>
-          <div class="obj-text"><strong>Auto renewal</strong> — COURIER contacts the CA and retrieves the new certificate automatically</div>
-        </div>
-        <div class="objective">
-          <div class="obj-icon obj-cert">🚀</div>
-          <div class="obj-text"><strong>Auto deploy</strong> — installs to Dev and QA, verifies HTTPS on each server</div>
-        </div>
-        <div class="objective">
-          <div class="obj-icon obj-cert">🔐</div>
-          <div class="obj-text"><strong>Production gate</strong> — Teams approval card sent. Human must approve before Prod is touched</div>
-        </div>
+      <div class="card-line green"></div>
+      <div class="card-desc">
+        Monitors every SSL certificate daily, renews them automatically
+        through the CA, and deploys across environments —
+        holding Production until a human approves.
       </div>
-
-      <div class="trigger trigger-cert">⚡ Trigger: Daily scheduled scan at 6:00 AM</div>
     </div>
 
   </div>
 
-  <!-- Footer -->
-  <div class="footer">
-    <div class="footer-pill">
-      <div class="dot"></div>
-      12 AI Agents
-    </div>
-    <div class="footer-divider"></div>
-    <div class="footer-pill">
-      <div class="dot"></div>
-      Azure DevOps · Fortify SSC · Azure Key Vault
-    </div>
-    <div class="footer-divider"></div>
-    <div class="footer-pill">
-      <div class="dot"></div>
-      Humans stay in control — agents advise, humans approve
-    </div>
-  </div>
+  <div class="footer">Agents do the work &nbsp;·&nbsp; Humans keep the control</div>
 
 </body>
 </html>
