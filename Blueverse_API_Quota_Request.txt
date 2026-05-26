@@ -1,0 +1,63 @@
+Subject: Request to Increase API Quota Limit — RAG Evaluation Automation Project
+
+---
+
+Hi Team,
+
+I am reaching out to request an increase in the API quota limit for our Blueverse agent on the OSDU/Energy & Utilities use case.
+
+What We Are Building:
+
+We have developed an automated RAG evaluation system that continuously tests our Blueverse agent to ensure it is delivering
+accurate, consistent, and reliable answers. The system:
+
+- Automatically generates test questions based on the agent's knowledge domain
+- Fires questions to the Blueverse agent via REST API every 30 seconds
+- Evaluates each response across three independent layers — factual accuracy, text similarity against a reference answer, and
+  an AI-based quality judge
+- Detects inconsistencies when the same question receives different answers across runs
+- Generates a live dashboard and evaluation report showing the agent's performance scores
+
+Why We Need the Quota Increased:
+
+Our evaluation system runs continuously during testing sessions, making approximately 2 API calls every 30 seconds (one for the
+test question, one to generate a reference answer). During a standard 1-hour testing session, this amounts to roughly 120–150
+API calls per hour.
+
+Currently, we are hitting the hourly quota limit mid-session, which causes the agent to return:
+
+    "Hello, you have reached your quota limit for the hour in this application. Please try again in the next hour."
+
+This error response gets stored as a test result and incorrectly flags the agent as inconsistent and contradicting previous
+answers, since the quota error message differs from the actual policy answer. This makes our evaluation data unreliable.
+
+What We Are Requesting:
+
+Could you please increase the API call quota for our agent to support at least 200 calls per hour for our testing use case?
+Alternatively, if there is a dedicated developer/testing tier available, we would appreciate being onboarded to that.
+
+Agent Details:
+- Agent Name: newagent_f0915272 (or as registered in your system)
+- Use Case: Energy & Utilities — OSDU Platform, Well Lifecycle Management, Subsurface Data Digitization
+- Purpose: Automated quality evaluation and testing (internal, non-production)
+
+This evaluation system is a key part of our quality assurance process before we deploy the agent to end users. The quota
+limitation is currently the only blocker preventing us from running complete evaluation sessions.
+
+Please let me know if you need any additional details or a call to discuss further.
+
+Thank you for your support.
+
+Best regards,
+[Your Name]
+[Your Team / Project Name]
+[Your Email / Contact]
+
+---
+
+Key points this email covers:
+- What you built and why
+- How many API calls you need and why
+- The exact error you're seeing and its impact on your evaluation
+- Specific ask (200 calls/hour)
+- Agent details for them to identify your account

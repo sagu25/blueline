@@ -1,0 +1,21 @@
+Fortify Finding — SQL Injection
+
+Category: SQL Injection
+Severity: Critical
+File: Services/OrderService.cs
+Line: 47
+Rule: sql-injection
+
+Description:
+The method GetOrdersByCustomer() constructs a SQL query by directly concatenating
+user-supplied input (customerId parameter) into the query string without sanitization.
+This allows an attacker to inject arbitrary SQL commands.
+
+Vulnerable code:
+    public List<Order> GetOrdersByCustomer(string customerId)
+    {
+        string query = "SELECT * FROM Orders WHERE CustomerId = '" + customerId + "'";
+        return _db.ExecuteQuery(query);
+    }
+
+This endpoint is called from the public-facing Orders API controller.

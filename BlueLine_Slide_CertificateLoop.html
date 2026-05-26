@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Certificate Loop — Project BlueLine</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #060b14;
+      color: #e2e8f0;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 48px 64px;
+      overflow: hidden;
+    }
+
+    /* ── Top bar ── */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 40px;
+    }
+
+    .track-label { display: flex; align-items: center; gap: 12px; }
+
+    .track-badge {
+      background: rgba(34,197,94,0.12);
+      border: 1px solid rgba(34,197,94,0.3);
+      color: #22c55e;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 5px 14px;
+      border-radius: 20px;
+    }
+
+    .track-title {
+      font-size: 34px;
+      font-weight: 800;
+      color: #fff;
+      letter-spacing: -0.5px;
+    }
+
+    .track-title span { color: #22c55e; }
+    .bl-logo { font-size: 13px; color: #1e3a5f; font-weight: 600; letter-spacing: 0.05em; }
+
+    /* ── Before / After row ── */
+    .compare {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-bottom: 28px;
+    }
+
+    .compare-box {
+      border-radius: 12px;
+      padding: 20px 24px;
+      border: 1px solid;
+    }
+
+    .before {
+      background: rgba(239,68,68,0.04);
+      border-color: rgba(239,68,68,0.2);
+    }
+
+    .after {
+      background: rgba(34,197,94,0.04);
+      border-color: rgba(34,197,94,0.2);
+    }
+
+    .compare-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+
+    .label-before { color: #ef4444; }
+    .label-after  { color: #22c55e; }
+
+    .compare-items {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .chip {
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .chip-bad  { background: rgba(239,68,68,0.1);  color: #f87171;  border: 1px solid rgba(239,68,68,0.2); }
+    .chip-good { background: rgba(34,197,94,0.1);  color: #4ade80;  border: 1px solid rgba(34,197,94,0.2); }
+
+    /* ── Pipeline row ── */
+    .pipeline-wrap {
+      background: #0d1524;
+      border: 1px solid #1a2d45;
+      border-radius: 16px;
+      padding: 28px 32px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .pipeline-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #22c55e;
+      margin-bottom: 24px;
+    }
+
+    .pipeline {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+      flex: 1;
+    }
+
+    .agent {
+      flex: 1;
+      background: #060b14;
+      border: 1px solid #1a2d45;
+      border-radius: 12px;
+      padding: 20px 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      position: relative;
+    }
+
+    /* Colour accent top strip */
+    .agent::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      border-radius: 12px 12px 0 0;
+      background: #22c55e;
+      opacity: 0.4;
+    }
+
+    .agent-emoji { font-size: 22px; margin-bottom: 10px; }
+
+    .agent-name {
+      font-size: 12px;
+      font-weight: 800;
+      color: #22c55e;
+      letter-spacing: 0.08em;
+      margin-bottom: 6px;
+    }
+
+    .agent-role {
+      font-size: 10px;
+      font-weight: 700;
+      color: #475569;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 10px;
+    }
+
+    .agent-desc {
+      font-size: 12px;
+      color: #64748b;
+      line-height: 1.6;
+    }
+
+    /* Environment tags on HARBOUR */
+    .env-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      justify-content: center;
+      margin-top: 10px;
+    }
+
+    .env-tag {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 4px;
+    }
+
+    .env-auto { background: rgba(34,197,94,0.12); color: #4ade80; border: 1px solid rgba(34,197,94,0.25); }
+    .env-gate { background: rgba(249,115,22,0.12); color: #fb923c; border: 1px solid rgba(249,115,22,0.25); }
+
+    .arrow {
+      display: flex;
+      align-items: center;
+      padding: 0 10px;
+      color: #1e3a5f;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+
+    /* Footer */
+    .footer {
+      margin-top: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .footer-note { font-size: 12px; color: #1e3a5f; }
+
+    .human-note {
+      font-size: 12px;
+      color: #1e3a5f;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .human-dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; }
+  </style>
+</head>
+<body>
+
+  <!-- Top bar -->
+  <div class="topbar">
+    <div class="track-label">
+      <div class="track-badge">Track 3 of 3</div>
+      <div class="track-title"><span>Certificate</span> Loop</div>
+    </div>
+    <div class="bl-logo">PROJECT BLUELINE</div>
+  </div>
+
+  <!-- Before / After -->
+  <div class="compare">
+
+    <div class="compare-box before">
+      <div class="compare-label label-before">Without BlueLine — Today</div>
+      <div class="compare-items">
+        <div class="chip chip-bad">Tracked in spreadsheet</div>
+        <div class="chip chip-bad">Expiry missed on weekends</div>
+        <div class="chip chip-bad">Manual CA portal request</div>
+        <div class="chip chip-bad">RDP into each server to install</div>
+        <div class="chip chip-bad">No automatic verification</div>
+        <div class="chip chip-bad">Production outage risk</div>
+      </div>
+    </div>
+
+    <div class="compare-box after">
+      <div class="compare-label label-after">With BlueLine — Automated</div>
+      <div class="compare-items">
+        <div class="chip chip-good">All certs monitored daily</div>
+        <div class="chip chip-good">Flagged 90 days before expiry</div>
+        <div class="chip chip-good">CA renewal via API</div>
+        <div class="chip chip-good">Dev &amp; QA deployed automatically</div>
+        <div class="chip chip-good">HTTPS verified on each server</div>
+        <div class="chip chip-good">Production gated on human approval</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Pipeline -->
+  <div class="pipeline-wrap">
+    <div class="pipeline-label">4 Agent Pipeline — Triggered Daily at 6:00 AM</div>
+
+    <div class="pipeline">
+
+      <div class="agent">
+        <div class="agent-emoji">🗂️</div>
+        <div class="agent-name">REGENT</div>
+        <div class="agent-role">Inventory</div>
+        <div class="agent-desc">Maintains the full certificate inventory — domain, expiry, owner, environments, CA type — sourced from Azure Key Vault</div>
+      </div>
+
+      <div class="arrow">›</div>
+
+      <div class="agent">
+        <div class="agent-emoji">⏱️</div>
+        <div class="agent-name">TIMELINE</div>
+        <div class="agent-role">Expiry Analysis</div>
+        <div class="agent-desc">Assesses urgency for each certificate — EXPIRED, CRITICAL, URGENT, RENEWAL NEEDED, MONITOR, or OK — with a step-by-step renewal plan</div>
+      </div>
+
+      <div class="arrow">›</div>
+
+      <div class="agent">
+        <div class="agent-emoji">📨</div>
+        <div class="agent-name">COURIER</div>
+        <div class="agent-role">CA Renewal</div>
+        <div class="agent-desc">Contacts the Certificate Authority via API — Internal PKI or DigiCert — submits the renewal request and retrieves the new certificate</div>
+      </div>
+
+      <div class="arrow">›</div>
+
+      <div class="agent">
+        <div class="agent-emoji">🚀</div>
+        <div class="agent-name">HARBOUR</div>
+        <div class="agent-role">Deployment</div>
+        <div class="agent-desc">Installs the renewed certificate on all target servers and verifies HTTPS — then holds for approval before Production</div>
+        <div class="env-tags">
+          <div class="env-tag env-auto">Dev ✓ Auto</div>
+          <div class="env-tag env-auto">QA ✓ Auto</div>
+          <div class="env-tag env-gate">Prod ⏳ Gate</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <div class="footer-note">Trigger — Azure Timer runs daily at 6:00 AM UTC</div>
+    <div class="human-note"><div class="human-dot"></div> Teams approval card sent for Production — HARBOUR waits until a human clicks Approve</div>
+  </div>
+
+</body>
+</html>

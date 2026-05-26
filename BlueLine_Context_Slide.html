@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Project BlueLine</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #060b14;
+      color: #e2e8f0;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px;
+    }
+
+    /* Header */
+    .header {
+      text-align: center;
+      margin-bottom: 64px;
+    }
+
+    .title {
+      font-size: 42px;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .title span { color: #4A9EFF; }
+
+    .sub {
+      font-size: 15px;
+      color: #475569;
+      margin-top: 10px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    /* Cards */
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 28px;
+      width: 100%;
+      max-width: 1000px;
+    }
+
+    .card {
+      background: #0d1524;
+      border: 1px solid #1a2d45;
+      border-radius: 16px;
+      padding: 36px 32px;
+      text-align: center;
+    }
+
+    .emoji { font-size: 36px; margin-bottom: 16px; }
+
+    .card-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 10px;
+    }
+
+    .card-line {
+      width: 32px;
+      height: 3px;
+      border-radius: 2px;
+      margin: 0 auto 16px;
+    }
+    .blue  { background: #4A9EFF; }
+    .red   { background: #ef4444; }
+    .green { background: #22c55e; }
+
+    .card-desc {
+      font-size: 14px;
+      color: #64748b;
+      line-height: 1.7;
+    }
+
+    /* Footer */
+    .footer {
+      margin-top: 56px;
+      font-size: 13px;
+      color: #334155;
+      letter-spacing: 0.04em;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="title">Project <span>BlueLine</span></div>
+    <div class="sub">AI-Powered Engineering Automation · Core &amp; Main</div>
+  </div>
+
+  <div class="cards">
+
+    <div class="card">
+      <div class="emoji">🧑‍💻</div>
+      <div class="card-title">Quality Gate</div>
+      <div class="card-line blue"></div>
+      <div class="card-desc">
+        Automatically reviews every Pull Request the moment it is raised —
+        checks coding standards, detects risks, and gives a clear recommendation
+        before any human reviewer opens the file.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="emoji">🔒</div>
+      <div class="card-title">Security Loop</div>
+      <div class="card-line red"></div>
+      <div class="card-desc">
+        Picks up Fortify security findings, triages them by severity,
+        and generates a ready-to-review fix Pull Request —
+        automatically, with a full audit trail.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="emoji">📜</div>
+      <div class="card-title">Certificate Loop</div>
+      <div class="card-line green"></div>
+      <div class="card-desc">
+        Monitors every SSL certificate daily, renews them automatically
+        through the CA, and deploys across environments —
+        holding Production until a human approves.
+      </div>
+    </div>
+
+  </div>
+
+  <div class="footer">Agents do the work &nbsp;·&nbsp; Humans keep the control</div>
+
+</body>
+</html>

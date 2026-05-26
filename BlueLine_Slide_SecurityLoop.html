@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Security Loop — Project BlueLine</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #060b14;
+      color: #e2e8f0;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 48px 64px;
+      overflow: hidden;
+    }
+
+    /* ── Top bar ── */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 44px;
+    }
+
+    .track-label { display: flex; align-items: center; gap: 12px; }
+
+    .track-badge {
+      background: rgba(239,68,68,0.12);
+      border: 1px solid rgba(239,68,68,0.3);
+      color: #ef4444;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 5px 14px;
+      border-radius: 20px;
+    }
+
+    .track-title {
+      font-size: 34px;
+      font-weight: 800;
+      color: #fff;
+      letter-spacing: -0.5px;
+    }
+
+    .track-title span { color: #ef4444; }
+    .bl-logo { font-size: 13px; color: #1e3a5f; font-weight: 600; letter-spacing: 0.05em; }
+
+    /* ── Main grid — 3 columns ── */
+    .main {
+      display: grid;
+      grid-template-columns: 1fr 1.8fr 1fr;
+      gap: 24px;
+      flex: 1;
+    }
+
+    /* ── Column shared styles ── */
+    .col {
+      background: #0d1524;
+      border: 1px solid #1a2d45;
+      border-radius: 16px;
+      padding: 28px 24px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .col-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+    }
+
+    .red   { color: #ef4444; }
+    .blue  { color: #4A9EFF; }
+    .green { color: #22c55e; }
+
+    /* ── Left: Problem ── */
+    .problem-item {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      flex: 1;
+    }
+
+    .p-row {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      padding: 14px;
+      background: #060b14;
+      border-radius: 10px;
+      border: 1px solid #131f30;
+    }
+
+    .p-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+
+    .p-text {
+      font-size: 13px;
+      color: #64748b;
+      line-height: 1.6;
+    }
+
+    .p-text strong { color: #94a3b8; display: block; margin-bottom: 2px; font-size: 12px; }
+
+    /* ── Middle: Pipeline (vertical) ── */
+    .pipeline {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      flex: 1;
+    }
+
+    .agent {
+      flex: 1;
+      background: #060b14;
+      border: 1px solid #1a2d45;
+      border-radius: 10px;
+      padding: 16px 18px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .agent-left {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+      width: 56px;
+    }
+
+    .agent-emoji { font-size: 20px; }
+
+    .agent-name {
+      font-size: 10px;
+      font-weight: 800;
+      color: #ef4444;
+      letter-spacing: 0.08em;
+    }
+
+    .agent-right { flex: 1; }
+
+    .agent-role {
+      font-size: 12px;
+      font-weight: 700;
+      color: #94a3b8;
+      margin-bottom: 3px;
+    }
+
+    .agent-desc {
+      font-size: 12px;
+      color: #475569;
+      line-height: 1.5;
+    }
+
+    .pipe-arrow {
+      text-align: center;
+      color: #1e3a5f;
+      font-size: 16px;
+      padding: 4px 0;
+      flex-shrink: 0;
+    }
+
+    /* ── Right: Output ── */
+    .output-items {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      flex: 1;
+    }
+
+    .out-row {
+      padding: 14px;
+      background: #060b14;
+      border-radius: 10px;
+      border: 1px solid #131f30;
+    }
+
+    .out-badge {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      padding: 3px 10px;
+      border-radius: 4px;
+      margin-bottom: 7px;
+    }
+
+    .badge-critical { background: rgba(239,68,68,0.15);  color: #ef4444;  border: 1px solid rgba(239,68,68,0.3); }
+    .badge-high     { background: rgba(249,115,22,0.15); color: #f97316;  border: 1px solid rgba(249,115,22,0.3); }
+    .badge-fp       { background: rgba(34,197,94,0.15);  color: #22c55e;  border: 1px solid rgba(34,197,94,0.3); }
+    .badge-audit    { background: rgba(74,158,255,0.12); color: #4A9EFF;  border: 1px solid rgba(74,158,255,0.3); }
+
+    .out-text {
+      font-size: 12.5px;
+      color: #64748b;
+      line-height: 1.5;
+    }
+
+    .out-text strong { color: #94a3b8; }
+
+    /* Footer */
+    .footer {
+      margin-top: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .footer-note { font-size: 12px; color: #1e3a5f; }
+
+    .human-note {
+      font-size: 12px;
+      color: #1e3a5f;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .human-dot { width: 6px; height: 6px; border-radius: 50%; background: #ef4444; }
+  </style>
+</head>
+<body>
+
+  <!-- Top bar -->
+  <div class="topbar">
+    <div class="track-label">
+      <div class="track-badge">Track 2 of 3</div>
+      <div class="track-title"><span>Security</span> Loop</div>
+    </div>
+    <div class="bl-logo">PROJECT BLUELINE</div>
+  </div>
+
+  <!-- Main grid -->
+  <div class="main">
+
+    <!-- Left: Problem -->
+    <div class="col">
+      <div class="col-label red">The Problem Today</div>
+      <div class="problem-item">
+        <div class="p-row">
+          <div class="p-icon">📋</div>
+          <div class="p-text"><strong>Finding backlog</strong>Fortify produces a list — engineers manually decide what to fix first</div>
+        </div>
+        <div class="p-row">
+          <div class="p-icon">⏳</div>
+          <div class="p-text"><strong>Hours per finding</strong>Research, understand, write fix, raise PR — all done manually</div>
+        </div>
+        <div class="p-row">
+          <div class="p-icon">📄</div>
+          <div class="p-text"><strong>No audit trail</strong>Decisions on what to fix or suppress are not consistently recorded</div>
+        </div>
+        <div class="p-row">
+          <div class="p-icon">🔁</div>
+          <div class="p-text"><strong>False positives</strong>Engineers waste time investigating findings that are not real vulnerabilities</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Middle: Pipeline -->
+    <div class="col">
+      <div class="col-label red">4 Agent Pipeline</div>
+      <div class="pipeline">
+
+        <div class="agent">
+          <div class="agent-left">
+            <div class="agent-emoji">👁️</div>
+            <div class="agent-name">WATCHTOWER</div>
+          </div>
+          <div class="agent-right">
+            <div class="agent-role">Finding Discovery</div>
+            <div class="agent-desc">Monitors Fortify SSC continuously. Detects new findings and publishes them to the pipeline automatically.</div>
+          </div>
+        </div>
+
+        <div class="pipe-arrow">↓</div>
+
+        <div class="agent">
+          <div class="agent-left">
+            <div class="agent-emoji">🛡️</div>
+            <div class="agent-name">BULWARK</div>
+          </div>
+          <div class="agent-right">
+            <div class="agent-role">Triage &amp; Classify</div>
+            <div class="agent-desc">Classifies each finding — CRITICAL, HIGH, NEEDS REVIEW, or FALSE POSITIVE — with OWASP mapping and attack scenario.</div>
+          </div>
+        </div>
+
+        <div class="pipe-arrow">↓</div>
+
+        <div class="agent">
+          <div class="agent-left">
+            <div class="agent-emoji">🔧</div>
+            <div class="agent-name">FORGE</div>
+          </div>
+          <div class="agent-right">
+            <div class="agent-role">Fix PR Generation</div>
+            <div class="agent-desc">Writes the corrected code and creates a draft Pull Request in Azure DevOps — ready for a developer to review.</div>
+          </div>
+        </div>
+
+        <div class="pipe-arrow">↓</div>
+
+        <div class="agent">
+          <div class="agent-left">
+            <div class="agent-emoji">📝</div>
+            <div class="agent-name">STEWARD</div>
+          </div>
+          <div class="agent-right">
+            <div class="agent-role">Audit Log</div>
+            <div class="agent-desc">Writes every decision to an immutable audit log — classification, action taken, human gate status. 7-year retention.</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Right: Output -->
+    <div class="col">
+      <div class="col-label red">What Gets Produced</div>
+      <div class="output-items">
+
+        <div class="out-row">
+          <div class="out-badge badge-critical">CRITICAL</div>
+          <div class="out-text"><strong>Instant classification</strong> with confidence score and OWASP category — no manual research needed</div>
+        </div>
+
+        <div class="out-row">
+          <div class="out-badge badge-high">ATTACK SCENARIO</div>
+          <div class="out-text"><strong>Exact exploit path</strong> explained — what an attacker can do if this vulnerability is not fixed</div>
+        </div>
+
+        <div class="out-row">
+          <div class="out-badge badge-fp">DRAFT FIX PR</div>
+          <div class="out-text"><strong>Ready-to-review fix</strong> in Azure DevOps — branch created, corrected code written, reviewer note added</div>
+        </div>
+
+        <div class="out-row">
+          <div class="out-badge badge-audit">AUDIT LOG</div>
+          <div class="out-text"><strong>Immutable record</strong> of every finding, every decision, every action — compliance-ready out of the box</div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <div class="footer-note">Trigger — Fortify SSC scan completes in CI/CD pipeline</div>
+    <div class="human-note"><div class="human-dot"></div> Developer reviews and approves the FORGE draft PR — agents never merge code</div>
+  </div>
+
+</body>
+</html>

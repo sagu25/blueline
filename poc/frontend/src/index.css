@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: dark; }
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #060b14;
+  color: #e2e8f0;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: #0d1524; }
+::-webkit-scrollbar-thumb { background: #243d5c; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #4A9EFF; }
+
+/* Textarea & input reset */
+textarea, input {
+  font-family: inherit;
+  color: #e2e8f0;
+  background: transparent;
+  border: none;
+  outline: none;
+}
+
+/* Code font */
+code, pre, .font-mono {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
+}
+
+/* Smooth transitions on interactive elements */
+button { transition: all 0.15s ease; }
+
+/* Animated gradient background for loading skeleton */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    #111e30 25%,
+    #1a2d45 50%,
+    #111e30 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Pipeline connector line */
+.pipeline-line {
+  flex: 1;
+  height: 2px;
+  background: linear-gradient(90deg, #243d5c, #1a2d45);
+  min-width: 16px;
+  max-width: 40px;
+}
+.pipeline-line.active {
+  background: linear-gradient(90deg, #4A9EFF, #243d5c);
+}
+.pipeline-line.done {
+  background: linear-gradient(90deg, #22c55e, #4A9EFF);
+}
