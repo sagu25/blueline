@@ -1,1368 +1,1525 @@
-# Project BlueLine — Complete Project Documentation
+# Project BlueLine — Project Documentation
 
 **Version:** 1.0
-**Date:** April 2026
-**Prepared by:** LTM AI-Led Engineering Team
-**Repository:** https://github.com/sagu25/blueline.git
-**Status:** POC Delivered | Production Architecture Designed
+**Date:** 2026-05-26
+**Prepared by:** Project BlueLine Team
+**Status:** In Progress
 
 ---
 
 ## Table of Contents
 
-1. [Project Overview](#1-project-overview)
-2. [System Architecture](#2-system-architecture)
-3. [The Three Automation Tracks](#3-the-three-automation-tracks)
-4. [All 12 Agents — Complete Reference](#4-all-12-agents--complete-reference)
-5. [Technology Stack](#5-technology-stack)
-6. [Project Folder Structure](#6-project-folder-structure)
-7. [Local Setup & Installation](#7-local-setup--installation)
-8. [Configuration & Environment Variables](#8-configuration--environment-variables)
-9. [Running the POC Application](#9-running-the-poc-application)
-10. [System Integrations](#10-system-integrations)
-11. [Production Architecture](#11-production-architecture)
-12. [Human Control Points & Safety Design](#12-human-control-points--safety-design)
-13. [Shadow Mode](#13-shadow-mode)
-14. [Testing Guide](#14-testing-guide)
-15. [Deployment Guide](#15-deployment-guide)
-16. [DAS Coding Standards Reference](#16-das-coding-standards-reference)
-17. [Glossary](#17-glossary)
+1. [Tech Stack & Environment](#1-tech-stack--environment)
+2. [Governance & Execution](#2-governance--execution)
+3. [Agent 1 — CLARION](#agent-1-clarion)
+4. [Agent 2 — LUMEN](#agent-2-lumen)
+5. [Agent 3 — VECTOR](#agent-3-vector)
+6. [Agent 4 — ASCENT](#agent-4-ascent)
+7. [Agent 5 — BULWARK](#agent-5-bulwark)
+8. [Agent 6 — WATCHTOWER](#agent-6-watchtower)
+9. [Agent 7 — FORGE](#agent-7-forge)
+10. [Agent 8 — STEWARD](#agent-8-steward)
+11. [Agent 9 — TIMELINE](#agent-9-timeline)
+12. [Agent 10 — REGENT](#agent-10-regent)
+13. [Agent 11 — COURIER](#agent-11-courier)
+14. [Agent 12 — HARBOUR](#agent-12-harbour)
+15. [Standard Documentation Folder Structure](#standard-documentation-folder-structure)
 
 ---
 
-## 1. Project Overview
+## 1. Tech Stack & Environment
 
-### What Is Project BlueLine?
+### Frameworks, LLMs & Infrastructure
 
-Project BlueLine is an **AI-powered engineering automation system** that replaces three heavily manual workflows with intelligent agents running automatically in the background on Azure infrastructure.
-
-It targets engineering teams working on **.NET (C#) and Angular (TypeScript)** codebases under **Azure DevOps**, integrating with **Fortify SSC** for security scanning and **Azure Key Vault** for certificate management.
-
-### The Three Problems It Solves
-
-| # | Problem | Current Pain | BlueLine Solution |
-|---|---|---|---|
-| 1 | **Code Review** | Every PR manually checked — slow, inconsistent, reviewer-dependent | AI agents review every PR on open, post inline comments, flag risks within 45 seconds |
-| 2 | **Security (Fortify)** | Fortify produces finding lists — engineers manually triage, research, and fix each one | Agents triage findings with AI, classify by severity, and generate fix code as draft PRs |
-| 3 | **SSL Certificates** | Tracked via spreadsheet — manual requests, installs across Dev/QA/Prod | Agents detect expiry, raise renewal, and deploy to all environments automatically |
-
-### Core Design Principle
-
-> **Humans stay in control.** Agents analyse and prepare. Humans decide and approve. No code is merged and no Production deployment happens without a human approving it.
-
-### Project Status
-
-| Track | POC Status | Production Status |
-|---|---|---|
-| Quality Gate (Code Review) | **Fully built and runnable** | Architecture designed; ready to deploy |
-| Security Loop (Fortify) | Core agents built; Fortify connection simulated | Awaiting Fortify SSC API access |
-| Certificate Loop | Core agents built; CA and IIS simulated | Awaiting Key Vault + WinRM access |
-
----
-
-## 2. System Architecture
-
-### High-Level Architecture
-
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│                         EXTERNAL TRIGGERS                            │
-│  ┌──────────────────┐  ┌──────────────────┐  ┌───────────────────┐  │
-│  │  Azure DevOps    │  │   Fortify SSC    │  │   Azure Timer     │  │
-│  │  PR Webhook      │  │  Pipeline Hook   │  │   (Daily)         │  │
-│  └────────┬─────────┘  └────────┬─────────┘  └────────┬──────────┘  │
-└───────────┼────────────────────┼────────────────────────┼────────────┘
-            │                    │                         │
-┌───────────▼────────────────────▼─────────────────────────▼──────────┐
-│                   AZURE API MANAGEMENT (Gateway)                      │
-│              Auth · Rate Limiting · Request Routing                   │
-└───────────┬────────────────────┬─────────────────────────┬───────────┘
-            │                    │                         │
-┌───────────▼──────┐  ┌──────────▼──────────┐  ┌──────────▼──────────┐
-│  QUALITY GATE    │  │   SECURITY LOOP      │  │  CERTIFICATE LOOP   │
-│  Function App    │  │   Function App       │  │  Function App       │
-│                  │  │                      │  │                     │
-│  CLARION         │  │  WATCHTOWER          │  │  TIMELINE           │
-│  LUMEN           │  │  BULWARK             │  │  REGENT             │
-│  VECTOR          │  │  FORGE               │  │  COURIER            │
-│  ASCENT          │  │  STEWARD             │  │  HARBOUR            │
-└──────────┬───────┘  └──────────┬───────────┘  └──────────┬──────────┘
-           │                     │                          │
-┌──────────▼─────────────────────▼──────────────────────────▼──────────┐
-│                         SHARED SERVICES LAYER                          │
-│  ┌───────────────┐  ┌────────────────┐  ┌─────────────────────────┐  │
-│  │  Claude API   │  │ Azure Service  │  │  Azure Monitor +        │  │
-│  │  (LLM Core)   │  │ Bus (Messaging)│  │  Log Analytics          │  │
-│  └───────────────┘  └────────────────┘  └─────────────────────────┘  │
-│  ┌───────────────┐  ┌────────────────┐  ┌─────────────────────────┐  │
-│  │  Azure Key    │  │ Azure Storage  │  │  Azure Table Storage    │  │
-│  │  Vault        │  │ (Audit Logs)   │  │  (Cert Inventory)       │  │
-│  └───────────────┘  └────────────────┘  └─────────────────────────┘  │
-└───────────────────────────────────────────────────────────────────────┘
-            │                     │                          │
-┌───────────▼──────┐  ┌───────────▼───────┐  ┌─────────────▼──────────┐
-│  Azure DevOps    │  │   Fortify SSC      │  │  Azure Key Vault /     │
-│  / GitHub API    │  │   REST API         │  │  IIS / App Service     │
-└──────────────────┘  └────────────────────┘  └────────────────────────┘
-```
-
-### How Agents Communicate
-
-Agents do **not** call each other directly. They communicate through **Azure Service Bus** — a message queue. One agent publishes a message, the next picks it up independently.
-
-```
-WATCHTOWER  ──publishes──► "security.findings.new"  ──► BULWARK
-BULWARK     ──publishes──► "security.critical.fix-needed" ──► FORGE
-ALL agents  ──publish───► all events  ──► STEWARD (subscribes to all)
-```
-
-**Why this matters:**
-- Agents are independent — if FORGE is slow, BULWARK is not blocked
-- Agents are replaceable — swap one without touching others
-- Messages are persisted — if an agent crashes, the message is not lost
-
-### Quality Gate — Parallel Execution
-
-The Quality Gate uses **Azure Durable Functions** to run CLARION, LUMEN, and VECTOR simultaneously, then waits for all three before ASCENT posts its summary:
-
-```
-PR arrives
-    │
-    ├── CLARION ──┐
-    ├── LUMEN     ├── all three run at the same time (~30–45 seconds total)
-    └── VECTOR ───┘
-                │
-                ▼  (all three done)
-             ASCENT
-        aggregates results
-        posts one consolidated comment to the PR
-```
-
----
-
-## 3. The Three Automation Tracks
-
-### Track 1 — Quality Gate (Code Review)
-
-**Trigger:** Pull Request opened or updated in Azure DevOps
-
-**Flow:**
-```
-Developer opens PR in Azure DevOps
-         │
-         ▼
-Webhook fires → BlueLine receives PR ID
-         │
-    ┌────┴─────────────┐
-    ▼         ▼         ▼
- CLARION    LUMEN     VECTOR
- (standards)(smells)  (risk)
-    │         │         │
-    └────┬────┴─────────┘
-         ▼
-       ASCENT
-  aggregates + posts
-  one summary comment:
-  ┌───────────────────────────┐
-  │ RECOMMENDATION: BLOCK     │
-  │ Must Fix: 2  |  Warn: 3   │
-  │ Risk Score: 8.4/10        │
-  │ Reviewer must check: [X]  │
-  └───────────────────────────┘
-         │
-         ▼
-Human reviewer focuses on logic
-Human approves or requests changes
-(agents cannot merge — ever)
-```
-
-**Output per PR:**
-- Inline comment on each violation (file + line + rule + fix)
-- One consolidated ASCENT summary comment
-- Recommendation: APPROVE / REQUEST CHANGES / BLOCK
-- PR risk score (0–10)
-- Tiered finding list (Must Fix / Should Fix / Consider Fixing)
-
----
-
-### Track 2 — Security Loop (Fortify)
-
-**Trigger:** CI/CD pipeline run or WATCHTOWER scheduled scan
-
-**Flow:**
-```
-Fortify scan completes (pipeline or schedule)
-         │
-         ▼
-WATCHTOWER detects new findings
-         │
-         ▼
-BULWARK triages each finding:
-┌──────────────────────────────────────────┐
-│  SQL Injection        → CRITICAL         │
-│  Unused variable      → FALSE_POSITIVE   │
-│  Insecure config      → HIGH             │
-│  Ambiguous pattern    → NEEDS_REVIEW     │
-└──────────────────────────────────────────┘
-         │
-  CRITICAL/HIGH ──────────────────────────────┐
-         │                                     │
-         ▼                                     ▼
-FORGE reads source file           STEWARD logs everything
-Generates fix code                to immutable audit trail
-Creates draft fix PR:
-┌──────────────────────────────────────────┐
-│  Branch: fix/sql-injection-line-142      │
-│  Fix: parameterized query applied        │
-│  Test: unit test added                   │
-│  Status: DRAFT — awaiting approval       │
-└──────────────────────────────────────────┘
-         │
-         ▼
-Human reviews + approves fix PR
-(agents cannot merge — ever)
-```
-
----
-
-### Track 3 — Certificate Loop (SSL Renewal)
-
-**Trigger:** Azure Timer (daily schedule)
-
-**Flow:**
-```
-Every morning — TIMELINE runs
-         │
-         ▼
-Queries Azure Key Vault for all certs
-Flags expiring within 30 days:
-┌──────────────────────────────────────────┐
-│  api.example.com      → 12 days left     │
-│  payments.portal.com  → 28 days left     │
-└──────────────────────────────────────────┘
-         │
-         ▼
-REGENT updates the certificate inventory
-         │
-         ▼
-COURIER raises renewal with CA:
-Internal → C&M portal API
-External → DigiCert/InfoSec API
-         │
-         ▼
-Downloads + validates renewed cert:
-  expiry ✅  domain ✅  chain ✅
-         │
-         ▼
-HARBOUR deploys automatically:
-Dev  ──install──verify HTTPS ✅
-QA   ──install──verify HTTPS ✅
-Prod ──HOLDS──────────────────────────────┐
-                                          │
-Teams card sent to approver:              │
-┌──────────────────────────────────────┐  │
-│  Cert ready for Production           │  │
-│  Domain: api.example.com             │  │
-│  New expiry: 2027-04-27             │  │
-│  [APPROVE]  [REJECT]                 │  │
-└──────────────────────────────────────┘  │
-         │                                │
-Human clicks APPROVE ◄────────────────────┘
-         │
-HARBOUR deploys to Prod
-Verifies HTTPS ✅
-STEWARD writes audit log
-```
-
----
-
-## 4. All 12 Agents — Complete Reference
-
-### 4.1 CLARION — Coding Standards Checker
-
-**Track:** Quality Gate
-**File:** `poc/agents/clarion.py`
-**Trigger:** PR opened or updated
-
-**What it does:**
-Checks every changed file against the team's DAS/CDAS coding standards for .NET (C#) and Angular (TypeScript).
-
-**Standards enforced:**
-- C# naming conventions (PascalCase for types/methods, camelCase for params, `I` prefix for interfaces)
-- Critical async patterns — no `.Result` or `.Wait()`, always use `ConfigureAwait(false)`, `CancellationToken` propagation
-- HttpClient management — use `IHttpClientFactory`, never `new HttpClient()` directly
-- Secrets management — no hardcoded connection strings, keys, or passwords (use Key Vault)
-- Exception handling — never expose raw error messages to API callers
-- Input validation — `ModelState.IsValid`, FluentValidation, no raw user input passed to queries
-- CORS security — no wildcard origins with credentials
-- Dependency injection patterns — constructor injection only
-- Entity Framework best practices — `AsNoTracking()` for read-only, no N+1 queries
-- Logging standards — structured logging with Serilog/ILogger
-- Angular/TypeScript — `OnPush` change detection, typed HTTP clients, no `any` type
-
-**Input:** Code snippet (C# or TypeScript)
-**Output:**
-```json
-{
-  "violations": [
-    {
-      "rule": "ASYNC_001",
-      "severity": "error",
-      "line": 42,
-      "message": "Using .Result blocks the thread — use await instead",
-      "fix": "await GetDataAsync()",
-      "confidence": 0.95
-    }
-  ],
-  "files_checked": 1,
-  "language": "csharp"
-}
-```
-
----
-
-### 4.2 LUMEN — Code Smell & Anti-Pattern Detector
-
-**Track:** Quality Gate
-**File:** `poc/agents/lumen.py`
-**Trigger:** PR opened or updated
-
-**What it does:**
-Detects code quality and maintainability issues that are not strict rule violations but will cause problems over time.
-
-**Smells detected:**
-- Long methods (>40 lines)
-- Large classes (>300 lines)
-- Deep nesting (>3 levels)
-- Magic numbers and strings (unnamed literals)
-- Duplicate code blocks
-- Dead code (unreachable or unused)
-- Long parameter lists (>4 parameters)
-- Feature envy (method uses another class's data more than its own)
-- God classes (class doing too much)
-- Primitive obsession (using primitives instead of domain types)
-- .NET specific: `DbContext` as singleton, blocking async calls, N+1 queries
-
-**Input:** Code snippet
-**Output:**
-```json
-{
-  "smells": [
-    {
-      "type": "LONG_METHOD",
-      "severity": "major",
-      "location": "ProcessOrderAsync (line 15–87)",
-      "explanation": "72-line method doing 5 distinct things",
-      "refactoring_suggestion": "Extract into ValidateOrder(), CalculateTax(), SaveOrder(), NotifyCustomer()",
-      "effort": "medium"
-    }
-  ],
-  "maintainability_score": 4,
-  "summary": "3 major smells found"
-}
-```
-
----
-
-### 4.3 VECTOR — Risk & Complexity Scorer
-
-**Track:** Quality Gate
-**File:** `poc/agents/vector.py`
-**Trigger:** PR opened or updated
-
-**What it does:**
-Scores each file by risk level and identifies hotspots — tells the human reviewer *where to look* in the PR.
-
-**Metrics computed locally (before LLM call):**
-- Cyclomatic complexity (count of decision branches)
-- Maximum nesting depth (indentation-based)
-- Method/function count
-- Import/dependency count
-- Security operation detection (SQL, HTTP calls, auth, crypto patterns)
-- Test code presence detection
-- Blocking async calls (`.Result`, `.Wait`)
-- High-risk patterns (`new HttpClient`, file uploads, CORS wildcards)
-- Empty catch blocks
-
-**Input:** Code snippet
-**Output:**
-```json
-{
-  "overall_risk_score": 0.82,
-  "risk_level": "HIGH",
-  "metrics": {
-    "cyclomatic_complexity": 14,
-    "max_nesting_depth": 5,
-    "method_count": 8,
-    "has_security_operations": true
-  },
-  "hotspots": [
-    {
-      "location": "line 34–67",
-      "reason": "Complex auth logic with 5 nested conditions",
-      "reviewer_focus": "Verify all auth failure paths return 401, not 500"
-    }
-  ],
-  "reviewer_attention": "Focus on: auth flow complexity and SQL query parameters"
-}
-```
-
----
-
-### 4.4 ASCENT — Aggregator & Final Recommendation
-
-**Track:** Quality Gate
-**File:** `poc/agents/ascent.py`
-**Trigger:** After CLARION, LUMEN, and VECTOR have all completed
-
-**What it does:**
-Reads all three agents' outputs and produces one consolidated PR review comment with a clear recommendation.
-
-**Recommendation logic:**
-- `BLOCK` — any error-severity violation or confirmed security issue
-- `REQUEST_CHANGES` — error-level violations or significant warnings
-- `APPROVE` — minor issues only, no blockers
-
-**Tiers:**
-- **Tier 1 — Must Fix Before Merge:** Errors, security issues, CRITICAL risk findings
-- **Tier 2 — Should Fix:** Warnings, major smells, HIGH risk findings
-- **Tier 3 — Consider Fixing:** Info-level, minor smells, MEDIUM risk
-
-**Input:** Combined JSON from CLARION + LUMEN + VECTOR
-**Output (posted as PR comment):**
-```
-## BlueLine Review — REQUEST CHANGES
-
-**Overall Score: 5.2/10** | Risk: HIGH
-
-### Must Fix Before Merge (2 issues)
-- [CLARION] Line 42: Using .Result blocks thread — use await
-- [VECTOR] Auth logic complexity critical — verify all failure paths
-
-### Should Fix (3 issues)
-- [LUMEN] ProcessOrderAsync is 72 lines — extract to smaller methods
-...
-
-### Reviewer Checklist
-- [ ] Verify auth flow returns correct status codes
-- [ ] Check SQL parameters are all parameterized
-
-_Reviewed by BlueLine ASCENT | Score: 5.2/10 | 43 seconds_
-```
-
----
-
-### 4.5 WATCHTOWER — Fortify Scan Monitor
-
-**Track:** Security Loop
-**File:** `poc/agents/watchtower.py`
-**Trigger:** CI/CD pipeline hook or scheduled timer
-
-**What it does:**
-Monitors Fortify SSC for new vulnerability findings. When new findings appear, publishes them to the security pipeline for BULWARK to triage.
-
-**Production integration:**
-- Polls Fortify SSC REST API
-- Filters findings by project, date, and status
-- Publishes to Azure Service Bus topic: `security.findings.new`
-
-**POC:** Finding input is simulated via the Streamlit UI (paste a finding description)
-
----
-
-### 4.6 BULWARK — Security Finding Triage Agent
-
-**Track:** Security Loop
-**File:** `poc/agents/bulwark.py`
-**Trigger:** New finding from WATCHTOWER
-
-**What it does:**
-Classifies each Fortify finding using AI and OWASP Top 10 knowledge. Tells engineers whether to fix it now, review it, or mark it as a false positive — with the reasoning.
-
-**Classifications:**
-| Label | Meaning |
+| Layer | Technology |
 |---|---|
-| `CRITICAL` | Confirmed, exploitable, fix immediately |
-| `HIGH` | Very likely vulnerable, high priority |
-| `NEEDS_REVIEW` | Possible vulnerability, needs human verification |
-| `FALSE_POSITIVE` | Not actually vulnerable — reasoning provided |
+| AI / LLM | Claude (claude-sonnet-4-6) via Anthropic API |
+| Agent Runtime | Azure Functions (Python 3.11) |
+| Orchestration | Azure Durable Functions (Quality Gate parallel fan-out) |
+| Messaging | Azure Service Bus (agent-to-agent communication) |
+| Storage | Azure Blob Storage (audit logs, cert files), Azure Table Storage (inventory) |
+| Secrets | Azure Key Vault (certificates, credentials, API keys) |
+| Monitoring | Azure Monitor, Application Insights |
+| Source Control | Azure DevOps / GitHub |
+| Language | Python 3.11 (agent logic), C# .NET + TypeScript Angular (target codebases) |
+| Security Scanning | Fortify Software Security Center (Fortify SSC) REST API |
+| Certificate Deployment | IIS (WinRM / PowerShell), Azure App Service (Azure SDK) |
 
-**Input:** Fortify finding description + optional code snippet
-**Output:**
-```json
-{
-  "classification": "CRITICAL",
-  "confidence": 0.94,
-  "owasp_category": "A03:2021 – Injection",
-  "attack_scenario": "Attacker can inject SQL via the 'username' parameter and read all user records",
-  "affected_systems": "User authentication database",
-  "secure_code_example": "cmd.Parameters.AddWithValue(\"@username\", username);",
-  "false_positive_reason": null
-}
-```
+### Integration Landscape — External Systems
 
----
-
-### 4.7 FORGE — Security Fix PR Creator
-
-**Track:** Security Loop
-**File:** `poc/agents/forge.py`
-**Trigger:** CRITICAL or HIGH classification from BULWARK
-
-**What it does:**
-For every critical/high security finding, generates the actual fix code and creates a draft Pull Request in Azure DevOps. The PR is always in DRAFT state — it cannot be merged without human approval.
-
-**Input:** Finding description + BULWARK classification + vulnerable code
-**Output (draft PR metadata):**
-```json
-{
-  "branch_name": "fix/security/sql-injection-usercontroller-line-142",
-  "commit_message": "fix(security): parameterize SQL query in UserController to prevent injection",
-  "pr_title": "[SECURITY FIX] SQL Injection — UserController.cs:142",
-  "pr_description": "## Security Fix\n**Finding:** SQL Injection...\n**Fix:** Replaced string concatenation with parameterized query...",
-  "files_to_modify": ["Controllers/UserController.cs"],
-  "ready_to_merge": false,
-  "reviewer_note": "Verify all SQL queries in this controller are similarly parameterized"
-}
-```
+| System | Purpose | Track |
+|---|---|---|
+| Azure DevOps / GitHub | PR webhook trigger, inline PR comments, branch/PR creation | Quality Gate, Security |
+| Fortify SSC | Fetch vulnerability findings, suppress false positives, trigger scans | Security |
+| Azure Key Vault | Read/write certificate metadata and files | Certificate Loop |
+| Certificate Authority (Internal C&M Portal / DigiCert) | Request and download renewed SSL/TLS certificates | Certificate Loop |
+| IIS (WinRM) | Remote certificate deployment on Windows servers | Certificate Loop |
+| Azure App Service | Certificate binding via Azure SDK | Certificate Loop |
+| Azure Service Bus | Event-driven messaging between agents | All Tracks |
+| Microsoft Teams / Email | Human approval notifications (Prod gate) | Certificate Loop, Security |
 
 ---
 
-### 4.8 STEWARD — Audit Log Agent
+## 2. Governance & Execution
 
-**Track:** Security Loop
-**File:** `poc/agents/steward.py`
-**Trigger:** All security pipeline events
+### Dependencies
 
-**What it does:**
-Creates an immutable, structured audit log entry for every action taken in the security pipeline. Every finding, every classification, every fix, every suppression — all logged with reasoning and timestamp.
+| Dependency | Owner | Required For |
+|---|---|---|
+| Fortify SSC API access and credentials | InfoSec / Security Team | BULWARK, WATCHTOWER |
+| Azure DevOps / GitHub webhook configuration | DevOps | CLARION, LUMEN, VECTOR, ASCENT, FORGE |
+| Azure Key Vault access (read/write) | Ops / Platform | TIMELINE, REGENT, COURIER, HARBOUR |
+| CA API credentials (Internal C&M or DigiCert) | InfoSec | COURIER |
+| IIS / App Service deployment credentials | Ops | HARBOUR |
+| Anthropic API key (Claude) | BlueLine Team | All agents |
+| Azure Function App provisioning | Platform / DevOps | All agents |
+| Azure Service Bus namespace and topics | Platform | All agents |
+| Coding standards documentation | Engineering Lead | CLARION, LUMEN |
+| Azure Monitor / App Insights workspace | Platform | All agents |
 
-**Production storage:** Azure Blob Storage with WORM (Write Once Read Many) policy and 7-year retention.
+### Status Tracker
 
-**Output:**
-```json
-{
-  "run_id": "STEWARD-20260427-143502-A3F9",
-  "timestamp_utc": "2026-04-27T14:35:02Z",
-  "pipeline": "security_loop",
-  "finding_summary": "SQL Injection in UserController.cs:142",
-  "classification": "CRITICAL",
-  "confidence": 0.94,
-  "action_taken": "FORGE draft PR created: fix/security/sql-injection-usercontroller-line-142",
-  "human_gate_required": true,
-  "human_gate_status": "PENDING",
-  "immutable": true,
-  "retention_policy": "7_years"
-}
-```
+**Project Lifecycle:** Requirement → Design → Development → Testing → Deployment
+
+| Track | Current Phase | Notes |
+|---|---|---|
+| Quality Gate (CLARION, LUMEN, VECTOR, ASCENT) | Development | POC agents built; integration pending |
+| Security Loop (BULWARK, WATCHTOWER, FORGE, STEWARD) | Development | Fortify SSC API access being provisioned |
+| Certificate Loop (TIMELINE, REGENT, COURIER, HARBOUR) | Design | Pending Key Vault audit and CA API access |
+
+### Stakeholders
+
+| Role | Name / Team | Interest |
+|---|---|---|
+| Project Sponsor | Core & Main Leadership | Delivery of automation, cost reduction |
+| Primary Contact / Architect | Pankaj Pathak | Architecture and implementation oversight |
+| Engineering Team | Core & Main Developers | Reduced review burden, consistent quality standards |
+| InfoSec Team | Security / InfoSec | Fortify integration, vulnerability visibility, certificate governance |
+| Operations Team | DevOps / Ops | Certificate deployment, IIS management, infrastructure |
+| AI Agents (automated) | BlueLine Agent Suite | Execution of defined automation tasks |
+
+### For Completed Projects
+
+> **Status: In Progress** — Project BlueLine is currently in the Development phase across Quality Gate and Security tracks. This section will be completed upon full production rollout.
+
+- **Project Completion Summary:** To be filled on project close.
+- **Business Impact:** To be measured post-rollout (target: >60% reduction in manual review time, zero certificate expiry incidents).
 
 ---
 
-### 4.9 TIMELINE — Certificate Expiry Monitor
+---
 
-**Track:** Certificate Loop
-**File:** `poc/agents/timeline.py`
-**Trigger:** Daily Azure Timer
+# Agent-Level Documentation Checklist
 
-**What it does:**
-Queries Azure Key Vault for all certificates and flags any expiring within threshold windows.
+> Required for each individual agent.
 
-**Urgency levels:**
-| Level | Condition |
+---
+
+## Agent 1: CLARION
+
+### Core Definition
+
+| Field | Value |
 |---|---|
-| `EXPIRED` | Already expired |
-| `CRITICAL` | < 7 days remaining |
-| `URGENT` | < 14 days remaining |
-| `RENEWAL_NEEDED` | < 30 days remaining |
-| `MONITOR` | 30–90 days remaining |
-| `OK` | > 90 days remaining |
+| Agent Name | CLARION |
+| Agent ID | BL-QG-001 |
+| Project Mapping | Project BlueLine — Quality Gate Track |
+| Status Lifecycle | Development → Testing |
+| Trigger Type | Event-based (PR webhook) |
+| Human Gate | No |
 
-**Input:** Certificate metadata (subject, expiry date, environments, CA type)
-**Output:**
-```json
-{
-  "urgency": "URGENT",
-  "days_until_expiry": 11,
-  "risk_level": "HIGH",
-  "renewal_path": "internal_pki",
-  "action_plan": [
-    "1. Generate CSR via COURIER",
-    "2. Submit to C&M portal",
-    "3. Download issued cert",
-    "4. Deploy via HARBOUR to Dev → QA → Prod"
-  ],
-  "automation_possible": true,
-  "risks": ["IIS binding may need manual update if thumbprint changes"]
-}
-```
+### Problem & Purpose (MANDATORY)
 
----
+**Agent-Level Problem Statement:**
+Pull request reviewers manually check every code change against .NET and Angular coding standards, producing inconsistent results that depend on individual reviewer experience and availability. There is no automated enforcement of naming conventions, structural patterns, or security smells at the PR stage.
 
-### 4.10 REGENT — Certificate Inventory Manager
+**Executive Summary:**
+CLARION is an AI-powered coding standards enforcement agent that automatically reviews every PR diff against established .NET (C#) and Angular (TypeScript) guidelines. It posts inline comments on specific lines with the exact violation, the rule breached, the reason it matters, and a corrected code snippet — giving human reviewers a pre-annotated PR so they can focus on logic and context rather than style checking.
 
-**Track:** Certificate Loop
-**File:** `poc/agents/regent.py`
-**Trigger:** TIMELINE output
+**Business Value:** Eliminates inconsistent code quality enforcement; reduces reviewer cognitive load; catches standards violations before merge; produces a consistent, auditable review record on every PR.
 
-**What it does:**
-Maintains a structured inventory of all SSL/TLS certificates across all environments. Tracks owner, CA type, environments, expiry, and status.
+### Functional Design
 
-**POC:** In-memory sample database with 4 certificates.
-**Production:** Azure Table Storage — updated by all certificate agents.
+**Functional Flow (Step-by-Step):**
 
-**Sample inventory entry:**
-```json
-{
-  "name": "api.coreandmain.com",
-  "subject": "api.coreandmain.com",
-  "owner": "platform-team",
-  "ca_type": "internal",
-  "environments": ["dev", "qa", "prod"],
-  "expiry_date": "2026-05-08",
-  "days_remaining": 11,
-  "status": "URGENT",
-  "deployment_targets": {
-    "dev": "IIS — devserver01",
-    "qa": "IIS — qaserver01",
-    "prod": "Azure App Service — api-prod"
-  }
-}
-```
+1. Developer opens or updates a PR in Azure DevOps / GitHub.
+2. Webhook fires; CLARION receives the PR ID.
+3. CLARION calls Claude with its system prompt (coding rules) and the PR context.
+4. Claude calls tool `fetch_pr_diff` to retrieve the full code diff.
+5. Claude analyses each changed file against .NET and Angular standards.
+6. For each violation found, Claude calls `post_pr_comment` with: file path, line number, violation type, explanation, confidence score, and corrected code.
+7. CLARION logs all actions to the audit trail and returns an AgentResult.
 
----
+**Inputs / Outputs:**
 
-### 4.11 COURIER — Certificate Renewal Requester
-
-**Track:** Certificate Loop
-**File:** `poc/agents/courier.py`
-**Trigger:** TIMELINE urgency flag
-
-**What it does:**
-Calls the appropriate Certificate Authority API to request a certificate renewal and downloads the issued certificate.
-
-**Supported CAs:**
-- Internal PKI (C&M portal API)
-- DigiCert (external CA API)
-- Let's Encrypt (ACME protocol)
-
-**Input:** Certificate subject, CA type, environments, days remaining
-**Output:**
-```json
-{
-  "request_summary": "Renewal request submitted to Internal PKI",
-  "ca_order_id": "PKI-2026-0427-00142",
-  "validation_method": "Internal auto-approval (no manual step needed)",
-  "estimated_delivery": "2–4 hours",
-  "cert_download_ready": true,
-  "cert_format": "PFX",
-  "simulated_thumbprint": "3A:9F:...:B2",
-  "next_steps_for_harbour": "Deploy PFX to IIS; bind to site; verify HTTPS"
-}
-```
-
----
-
-### 4.12 HARBOUR — Certificate Deployment Agent
-
-**Track:** Certificate Loop
-**File:** `poc/agents/harbour.py`
-**Trigger:** COURIER output (renewed certificate ready)
-
-**What it does:**
-Installs the renewed certificate on all target servers (IIS via WinRM, Azure App Service via Azure SDK). Verifies HTTPS is working after each install. Sends a Teams approval card before deploying to Production — and waits for human approval.
-
-**Deployment methods:**
-- IIS servers — PowerShell via WinRM (remote execution)
-- Azure App Service — Azure CLI / Azure SDK
-
-**Input:** Certificate details, new thumbprint, deployment targets
-**Output:**
-```json
-{
-  "deployment_plan": [
-    {
-      "environment": "Dev",
-      "target": "IIS — devserver01",
-      "method": "WinRM PowerShell",
-      "commands": [
-        "Import-PfxCertificate -FilePath cert.pfx -CertStoreLocation Cert:\\LocalMachine\\My",
-        "Set-WebBinding -Name 'DefaultWebSite' -BindingInformation '*:443:' -CertificateThumbprint '3A9F...' -CertificateStoreName 'My'"
-      ],
-      "https_verification": "Invoke-WebRequest https://api-dev.example.com -UseBasicParsing",
-      "status": "DEPLOYED"
-    },
-    {
-      "environment": "Production",
-      "target": "Azure App Service — api-prod",
-      "status": "PENDING_APPROVAL"
-    }
-  ],
-  "teams_approval_card": {
-    "title": "Certificate Deployment — Production Approval Required",
-    "domain": "api.coreandmain.com",
-    "new_expiry": "2027-04-27",
-    "actions": ["APPROVE", "REJECT"]
-  },
-  "production_gate": "AWAITING_HUMAN_APPROVAL"
-}
-```
-
----
-
-## 5. Technology Stack
-
-| Layer | Technology | Version | Purpose |
-|---|---|---|---|
-| **Agent runtime** | Python | 3.11.9 | All agent logic |
-| **POC UI** | Streamlit | 1.41.0 | Demo dashboard |
-| **AI / LLM** | Azure OpenAI (gpt-4o) | API v2024-08-01 | All agent reasoning |
-| **AI client** | OpenAI Python SDK | 1.57.0 | Azure-compatible client |
-| **HTTP client** | requests | 2.32.3 | Azure DevOps REST API calls |
-| **Config** | python-dotenv | 1.0.1 | `.env` file loading |
-| **Azure Functions** | Python 3.11 | — | Production serverless compute |
-| **Azure Durable Functions** | — | — | Quality Gate parallel orchestration |
-| **Azure Service Bus** | — | — | Agent-to-agent messaging |
-| **Azure Key Vault** | — | — | Secrets + certificate storage |
-| **Azure Table Storage** | — | — | Certificate inventory |
-| **Azure Blob Storage** | — | — | Immutable audit logs |
-| **Azure Monitor** | — | — | Centralized logging and alerts |
-| **Azure API Management** | — | — | Webhook ingress and auth |
-| **IaC** | Azure Bicep | — | Infrastructure provisioning |
-| **Source control** | Git / Azure DevOps | — | Code and PR management |
-| **Security scanning** | Fortify SSC | REST API | SAST findings source |
-| **Code under review** | C# / .NET 4.8–10 | — | Quality Gate target |
-| **Code under review** | TypeScript / Angular | — | Quality Gate target |
-
----
-
-## 6. Project Folder Structure
-
-```
-blueline/
-│
-├── poc/                               ← Proof of Concept (runnable)
-│   ├── app.py                         ← Main Streamlit dashboard (4 tabs)
-│   ├── requirements.txt               ← Python dependencies
-│   ├── run.bat                        ← Windows quick-start script
-│   ├── .env.example                   ← Config template — copy to .env
-│   ├── .gitignore                     ← Excludes .env, __pycache__, images
-│   │
-│   ├── agents/                        ← All 12 agent implementations
-│   │   ├── __init__.py
-│   │   ├── clarion.py                 ← Coding standards checker
-│   │   ├── lumen.py                   ← Code smell detector
-│   │   ├── vector.py                  ← Risk and complexity scorer
-│   │   ├── ascent.py                  ← Aggregator and final recommendation
-│   │   ├── bulwark.py                 ← Fortify finding triage
-│   │   ├── watchtower.py              ← Fortify scan monitor
-│   │   ├── forge.py                   ← Security fix PR generator
-│   │   ├── steward.py                 ← Immutable audit log writer
-│   │   ├── timeline.py                ← Certificate expiry analyser
-│   │   ├── regent.py                  ← Certificate inventory manager
-│   │   ├── courier.py                 ← CA renewal requester
-│   │   └── harbour.py                 ← Certificate deployment agent
-│   │
-│   ├── utils/                         ← Shared utilities
-│   │   ├── __init__.py
-│   │   ├── llm_client.py              ← Azure OpenAI API connector
-│   │   ├── azure_devops.py            ← Azure DevOps REST API client
-│   │   └── pr_runner.py               ← Quality Gate PR orchestrator
-│   │
-│   └── samples/                       ← Demo and test files
-│       ├── bad_csharp.cs              ← C# with intentional violations
-│       ├── bad_typescript.ts          ← TypeScript with intentional violations
-│       ├── fortify_finding.txt        ← Sample Fortify finding for security demo
-│       └── ado_test_files/            ← 4 realistic files for live PR demo
-│           ├── InventoryService.cs    ← BLOCK scenario (critical violations)
-│           ├── UserController.cs      ← REQUEST_CHANGES scenario
-│           ├── stock-upload.component.ts ← BLOCK scenario (Angular security)
-│           ├── order-list.component.ts   ← APPROVE scenario (clean code)
-│           └── HOW_TO_USE.md         ← Instructions for demo PR setup
-│
-├── docs/
-│   └── das_review_standards.md        ← DAS/CDAS standards (loaded by CLARION/LUMEN)
-│
-├── BlueLine_Understanding_Document.md ← Project scope and objectives
-├── BlueLine_LLD.md                    ← Full low-level technical design
-├── BlueLine_Agent_Architecture_Overview.md ← How agents are built
-├── BlueLine_POC_Setup_Guide.md        ← Step-by-step POC setup
-├── BlueLine_POC_Test_Cases.md         ← Test scenarios
-├── BlueLine_RnD_Research_Document.md  ← Technology evaluation and justification
-├── BlueLine_Discovery_Questions.md    ← Discovery Q&A
-├── BlueLine_How_Agents_Are_Built.md   ← Accessible agent design explanation
-├── BlueLine_Key_Questions_From_Meeting.md ← Meeting Q&A and Spec Kit comparison
-├── BlueLine_Team_QnA_Prep.md          ← Stakeholder Q&A prep
-├── BlueLine_Demo_Talking_Points.md    ← Demo script
-├── BlueLine_Project_Handover_Document.md ← Client handover document
-├── AI_Tools_Overview_CodeReview_Security.md ← Market tool comparison
-└── BlueLine_Project_Documentation.md ← This document
-```
-
----
-
-## 7. Local Setup & Installation
-
-### Prerequisites
-
-| Requirement | Version | Notes |
-|---|---|---|
-| Python | 3.9+ | 3.11.9 confirmed working |
-| pip | Any | Comes with Python |
-| Azure OpenAI access | — | Endpoint + API key from Azure admin |
-| Azure DevOps PAT | — | For live PR review tab only |
-| Internet access | — | Calls Azure OpenAI and Azure DevOps APIs |
-
-### Step 1 — Clone the Repository
-
-```bash
-git clone https://github.com/sagu25/blueline.git
-cd blueline
-```
-
-### Step 2 — Install Dependencies
-
-```bash
-cd poc
-pip install -r requirements.txt
-```
-
-**requirements.txt:**
-```
-openai==1.57.0
-streamlit==1.41.0
-python-dotenv==1.0.1
-requests==2.32.3
-```
-
-### Step 3 — Create Your `.env` File
-
-Copy the template and fill in your credentials:
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env` — see Section 8 for all variables.
-
-### Step 4 — Run the Application
-
-**Windows:**
-```bat
-run.bat
-```
-
-**Any OS:**
-```bash
-streamlit run app.py
-```
-
-The app opens in your browser at `http://localhost:8501`.
-
----
-
-## 8. Configuration & Environment Variables
-
-Create `poc/.env` with these values. **Never commit this file — it is in `.gitignore`.**
-
-### Azure OpenAI (Required — all agents)
-
-```env
-AZURE_OPENAI_ENDPOINT=https://YOUR-RESOURCE-NAME.openai.azure.com/
-AZURE_OPENAI_API_KEY=your-api-key-here
-AZURE_OPENAI_DEPLOYMENT=gpt-4o
-```
-
-**How to get these:**
-- Azure Portal → Your OpenAI resource → Keys and Endpoint
-- Deployment name: Azure OpenAI Studio → Deployments
-
-### Azure DevOps (Required — Live PR Review tab only)
-
-```env
-AZURE_DEVOPS_ORG_URL=https://dev.azure.com/your-org-name
-AZURE_DEVOPS_PAT=your-personal-access-token
-AZURE_DEVOPS_PROJECT=YourProjectName
-AZURE_DEVOPS_REPO=YourRepositoryName
-```
-
-**How to get the PAT:**
-1. Azure DevOps → Profile picture (top right) → Personal access tokens
-2. New Token → Name: `BlueLine` → Expiry: 90 days
-3. Scopes: `Code → Read` and `Pull Request Threads → Read & Write`
-4. Copy immediately — shown only once
-
-**How to get Org URL, Project, Repo:**
-```
-https://dev.azure.com/your-org/YourProject/_git/YourRepo
-                     ^^^^^^^^  ^^^^^^^^^^^       ^^^^^^^^
-                     ORG_URL   PROJECT           REPO
-```
-
----
-
-## 9. Running the POC Application
-
-The POC is a Streamlit dashboard with four tabs:
-
-### Tab 1 — Quality Gate (Code Review)
-
-**Purpose:** Demonstrate the full CLARION → LUMEN → VECTOR → ASCENT pipeline on a code sample.
-
-**How to use:**
-1. Paste C# or TypeScript code into the text area (or use the preloaded samples)
-2. Select language
-3. Click **Run Quality Gate**
-4. Agents run in sequence, results appear with progress indicators
-5. Final ASCENT recommendation shown at bottom
-
-**Sample files available:**
-- `samples/bad_csharp.cs` — multiple CLARION and LUMEN violations
-- `samples/bad_typescript.ts` — Angular anti-patterns and security issues
-
----
-
-### Tab 2 — Security Loop
-
-**Purpose:** Demonstrate BULWARK → FORGE → STEWARD pipeline on a Fortify finding.
-
-**How to use:**
-1. Paste a Fortify finding description (or use the preloaded sample from `samples/fortify_finding.txt`)
-2. Optionally paste the vulnerable code snippet
-3. Click **Run Security Analysis**
-4. BULWARK classifies, FORGE generates draft PR, STEWARD logs
-5. All three outputs shown side by side
-
----
-
-### Tab 3 — Certificate Loop
-
-**Purpose:** Demonstrate TIMELINE → REGENT → COURIER → HARBOUR pipeline.
-
-**How to use:**
-1. Select a certificate from the REGENT inventory (4 sample certs loaded)
-2. Click **Run Certificate Analysis**
-3. TIMELINE assesses urgency, COURIER simulates renewal, HARBOUR generates deployment plan
-4. Teams approval card preview shown for Production deployment
-
----
-
-### Tab 4 — Live PR Review
-
-**Purpose:** Run the Quality Gate against a **real Pull Request** from your Azure DevOps project.
-
-**Requires:** Azure DevOps credentials in `.env` (see Section 8).
-
-**How to use:**
-1. Enter your ADO Org URL, Project, Repo, and PAT in the sidebar (or set in `.env`)
-2. Click **Load PRs** — live PRs from your repo appear
-3. Select a PR from the dropdown
-4. Toggle **Shadow Mode** (on = agents run but post no comments; off = comments posted to real PR)
-5. Click **Run Live Review**
-6. Agents fetch real PR diff, review each .cs and .ts file, and aggregate
-7. If shadow mode is off — inline comments and summary comment posted directly to the PR in ADO
-
----
-
-## 10. System Integrations
-
-### Azure DevOps Integration
-
-**File:** `poc/utils/azure_devops.py`
-**API version:** 7.1
-**Authentication:** PAT via Basic auth (base64 encoded)
-
-**Available operations:**
-
-| Method | Description |
+| | Detail |
 |---|---|
-| `list_pull_requests(status, top)` | Fetch open/active PRs from the configured repo |
-| `get_pr_details(pr_id)` | Get PR title, source branch, target branch, creator |
-| `get_pr_changed_files(pr_id)` | List changed `.cs` and `.ts` files only |
-| `get_file_content(path, branch)` | Fetch raw file content from a specific branch |
-| `post_inline_comment(pr_id, path, line, content)` | Post review comment on a specific line |
-| `post_pr_summary(pr_id, content)` | Post ASCENT summary comment on the PR |
+| Input | PR ID, PR diff (C# / TypeScript files), coding ruleset (loaded into system prompt) |
+| Output | Inline PR comments (file, line, rule, explanation, fix, confidence score) |
+| Output Format | Azure DevOps / GitHub PR review comments |
 
-**API Endpoints used:**
+**Trigger Type:** Event-based (Azure DevOps PR webhook on PR opened / updated)
+
+### Architecture (MANDATORY)
+
+**Conceptual Diagram:**
 ```
-GET  /{org}/{project}/_apis/git/repositories/{repo}/pullrequests
-GET  /{org}/{project}/_apis/git/repositories/{repo}/pullrequests/{id}
-GET  /{org}/{project}/_apis/git/repositories/{repo}/pullrequests/{id}/iterations/{i}/changes
-GET  /{org}/{project}/_apis/git/repositories/{repo}/items?path={}&versionDescriptor.version={}
-POST /{org}/{project}/_apis/git/repositories/{repo}/pullrequests/{id}/threads
-```
-
----
-
-### Azure OpenAI Integration
-
-**File:** `poc/utils/llm_client.py`
-
-**How it works:**
-```python
-# Every agent call follows this pattern:
-response = call_claude(
-    system_prompt="You are CLARION...",   # agent identity + rules
-    user_message="Review this code: ...", # the actual input
-    max_tokens=4096,
-    temperature=0.1                        # low temperature for consistency
-)
+PR Opened
+    |
+    v
+Azure DevOps Webhook
+    |
+    v
+CLARION (Azure Function)
+    |
+    +-- System Prompt: .NET + Angular coding rules (cached)
+    +-- Tool: fetch_pr_diff  --> Azure DevOps API
+    +-- Tool: post_pr_comment --> Azure DevOps API
+    |
+    v
+Inline PR Comments posted
+    |
+    v
+Audit Log written --> Azure Blob Storage
 ```
 
-**Configuration check:**
-The `get_active_provider()` function checks if Azure OpenAI env vars are set and returns the configured provider. If not configured, the UI shows a warning.
+**HLD:** See Diagrams/HLD/CLARION_HLD.png
 
----
+**LLD:** See Diagrams/LLD/CLARION_LLD.png (must be completed before Production)
 
-### Fortify SSC Integration (Production)
+### AI / Agent Configuration
 
-**Agent:** WATCHTOWER
-**Protocol:** REST API
-**Authentication:** API token
+**Model:** claude-sonnet-4-6 (Anthropic API)
 
-**Operations needed in production:**
-- `GET /api/v1/projectVersions/{id}/issues` — fetch new findings
-- `GET /api/v1/issues/{id}` — get finding detail
-- `POST /api/v1/issues/action/suppress` — suppress false positives
+**System Prompt Summary:**
+"You are CLARION, a coding standards enforcement agent for a .NET (C#) and Angular (TypeScript) codebase. Check the provided PR diff for: naming convention violations, structural pattern issues, type safety problems, security anti-patterns, and maintainability smells. Only flag violations you are confident about (confidence >= 0.7). For every violation provide: the exact file and line, the rule breached, why it matters, and the corrected code. Never block a PR — your role is advisory."
 
-**Access requirement:** Fortify SSC API URL + token with read access to your project — must be stored in Azure Key Vault as `fortify-api-token`.
+**Prompt Caching:** Enabled — coding standards document cached after first call (~60% cost reduction on repeated PR reviews).
 
----
+**Tools / API Specifications:**
 
-### Azure Key Vault Integration (Production)
-
-**Agents:** TIMELINE (read), REGENT (read/write), COURIER (write), HARBOUR (read)
-
-**Operations:**
-- List certificates and their metadata
-- Get certificate expiry dates
-- Store renewed PFX files
-- Retrieve certificates for deployment
-
-**Access requirement:** BlueLine Managed Identity needs `Certificate Get`, `Certificate List`, `Certificate Import` permissions on the Key Vault.
-
----
-
-### IIS / WinRM Integration (Production)
-
-**Agent:** HARBOUR
-**Protocol:** WinRM (Windows Remote Management) via PowerShell
-
-**PowerShell commands generated by HARBOUR:**
-```powershell
-# Import certificate to local machine store
-Import-PfxCertificate -FilePath "C:\certs\api.pfx" `
-  -CertStoreLocation Cert:\LocalMachine\My `
-  -Password (ConvertTo-SecureString "pass" -AsPlainText -Force)
-
-# Bind to IIS site
-Set-WebBinding -Name "DefaultWebSite" `
-  -BindingInformation "*:443:" `
-  -CertificateThumbprint "3A9F..." `
-  -CertificateStoreName "My"
-
-# Verify HTTPS
-Invoke-WebRequest https://api.example.com -UseBasicParsing
-```
-
-**Access requirement:** WinRM enabled on target servers; service account with `Import PFX` and IIS binding rights.
-
----
-
-### Microsoft Teams Integration (Production)
-
-**Agent:** HARBOUR (Production approval gate)
-**Protocol:** Incoming webhook
-
-**What is sent:**
-An Adaptive Card with certificate details and two buttons — **APPROVE** and **REJECT** — posted to a designated Teams channel. HARBOUR waits for the approval response before proceeding with Production deployment.
-
----
-
-## 11. Production Architecture
-
-### Azure Resource Groups
-
-```
-blueline-rg-shared     ← Key Vault, Service Bus, Storage, Log Analytics, API Management
-blueline-rg-quality    ← Quality Gate Function App
-blueline-rg-security   ← Security Loop Function App
-blueline-rg-certloop   ← Certificate Loop Function App
-```
-
-### Azure Function Apps
-
-| Function App | Plan | Always-On | Trigger |
-|---|---|---|---|
-| `blueline-quality-fa` | Premium EP1 | Yes | HTTP (PR webhook — needs fast response) |
-| `blueline-security-fa` | Consumption | No | HTTP (pipeline hook) + Timer |
-| `blueline-certloop-fa` | Consumption | No | Timer (daily at 06:00 UTC) |
-
-> Quality Gate uses Premium plan so Function App is always warm — cold start would delay PR review comments by 30–90 seconds.
-
-### Shared Resources
-
-| Resource | Type | Purpose |
+| Tool | API | Description |
 |---|---|---|
-| `blueline-kv` | Azure Key Vault | API keys, CA credentials, certificate files |
-| `blueline-sb` | Azure Service Bus | Agent-to-agent messaging (topics + subscriptions) |
-| `blueline-storage` | Azure Storage Account | STEWARD audit logs (immutable blobs) |
-| `blueline-tables` | Azure Table Storage | REGENT certificate inventory |
-| `blueline-law` | Log Analytics Workspace | All agent logs, dashboards, alerts |
-| `blueline-apim` | Azure API Management | Webhook ingress, auth, rate limiting |
+| `fetch_pr_diff` | Azure DevOps REST API / GitHub API | Fetches the full PR diff |
+| `post_pr_comment` | Azure DevOps REST API / GitHub API | Posts inline comment on a specific file and line |
 
-### Azure Service Bus Topics
+### Engineering & Access
 
-| Topic | Publisher | Subscriber |
-|---|---|---|
-| `security.findings.new` | WATCHTOWER | BULWARK |
-| `security.critical.fix-needed` | BULWARK | FORGE |
-| `security.all-events` | All security agents | STEWARD |
-| `certificate.renewal.requested` | TIMELINE | COURIER |
-| `certificate.deployed` | HARBOUR | STEWARD |
-
-### Infrastructure as Code
-
-Infrastructure is provisioned using **Azure Bicep** templates in the `infrastructure/` folder. Deploy with:
-
-```bash
-az deployment group create \
-  --resource-group blueline-rg-shared \
-  --template-file infrastructure/main.bicep \
-  --parameters @infrastructure/parameters.json
-```
-
----
-
-## 12. Human Control Points & Safety Design
-
-BlueLine is built on the principle that **no critical action happens automatically without a human approving it first.**
-
-### Approval Gates
-
-| Action | Automatic? | Approval method |
-|---|---|---|
-| Posting inline review comments on PR | Yes | No approval needed — informational |
-| Merging an agent-reviewed PR | No | Standard ADO PR approval by human reviewer |
-| Creating a FORGE security fix branch | Yes | No approval needed — just creates the branch |
-| Merging a FORGE-generated fix PR | No | Human reviews draft PR and approves in ADO |
-| Deploying certificate to Dev | Yes | No approval needed |
-| Deploying certificate to QA | Yes | No approval needed |
-| Deploying certificate to Production | No | Human clicks Approve on Teams card |
-| Suppressing a Fortify finding | Agent recommends | InfoSec reviews STEWARD log periodically |
-
-### Confidence Threshold
-
-Every agent output includes a confidence score (0.0–1.0). If confidence is below **0.7**, the agent:
-1. Does **not** take the action
-2. Logs the reason
-3. Sends a notification to the configured Teams channel
-4. The item remains in the queue for human review
-
-### Escalation Method (`escalate()`)
-
-Every agent inherits an `escalate()` method from `BaseAgent`. When called:
-- Action is halted immediately
-- Reason is logged to STEWARD
-- Notification sent via Teams
-- Run ID included so the human can find the full context
-
-### Destructive Actions — Never Automated
-
-Agents are explicitly instructed in their system prompts to **never**:
-- Delete or revoke a certificate
-- Merge code (agents only create draft PRs)
-- Suppress a finding without logging a reason
-- Deploy to Production without human approval
-- Discard a message — failed messages go to a dead-letter queue for review
-
----
-
-## 13. Shadow Mode
-
-Shadow mode is a critical safety feature for initial rollout.
-
-**When shadow mode is ON:**
-- Agents run the full analysis pipeline
-- All output is generated and logged
-- **No external actions are taken** — no PR comments posted, no Service Bus messages published, no deployments triggered
-- Engineering lead can review logs and validate output quality
-
-**When shadow mode is OFF:**
-- Agents take real actions — post comments, create PRs, deploy certs
-- All actions are logged to STEWARD
-
-**Recommended rollout:**
-1. **Sprint 1–2:** Shadow mode ON for Quality Gate — review all output in logs, tune false positives
-2. **Sprint 3:** Shadow mode OFF for Quality Gate — agents start posting live PR comments
-3. **Sprint 4–5:** Shadow mode ON for Security Loop — validate BULWARK classification accuracy
-4. **Sprint 6:** Shadow mode OFF for Security Loop
-5. **Month 2:** Certificate Loop in read-only mode — validate TIMELINE expiry detection
-6. **Month 3:** Certificate Loop fully live with human Prod gate active
-
-**In the POC:**
-Shadow mode toggle is on the Live PR Review tab (Tab 4) in the Streamlit UI.
-
----
-
-## 14. Testing Guide
-
-### Test Cases — Quality Gate
-
-| Scenario | Input File | Expected Outcome |
-|---|---|---|
-| Critical C# violations | `samples/ado_test_files/InventoryService.cs` | ASCENT → BLOCK; CLARION flags .Result, hardcoded secret |
-| Medium violations | `samples/ado_test_files/UserController.cs` | ASCENT → REQUEST_CHANGES; LUMEN flags long method |
-| Angular security issues | `samples/ado_test_files/stock-upload.component.ts` | ASCENT → BLOCK; CLARION flags unsafe HTML binding |
-| Clean code | `samples/ado_test_files/order-list.component.ts` | ASCENT → APPROVE; minor suggestions only |
-
-### Test Cases — Security Loop
-
-| Scenario | Input | Expected Outcome |
-|---|---|---|
-| SQL Injection finding | Paste from `samples/fortify_finding.txt` | BULWARK → CRITICAL; FORGE generates parameterized query fix PR |
-| False positive finding | Low-severity informational finding | BULWARK → FALSE_POSITIVE with reasoning |
-| Ambiguous finding | Complex pattern with context dependency | BULWARK → NEEDS_REVIEW; escalates to human |
-
-### Test Cases — Certificate Loop
-
-| Scenario | Certificate | Expected Outcome |
-|---|---|---|
-| Expiring in 5 days | REGENT sample cert 1 | TIMELINE → CRITICAL; COURIER → renew immediately; HARBOUR → deploy + Prod gate |
-| Expiring in 20 days | REGENT sample cert 2 | TIMELINE → URGENT; action plan generated |
-| Healthy cert | REGENT sample cert 4 | TIMELINE → OK; no action required |
-
-### Running the Full POC Test
-
-1. Set up `.env` with Azure OpenAI credentials
-2. Open each tab in sequence
-3. Use the sample files and preloaded inputs
-4. Verify each agent produces output matching the expected outcome above
-5. For Tab 4 (Live PR Review), push the `ado_test_files/` to a branch and create a real PR
-
----
-
-## 15. Deployment Guide
-
-### Production Deployment Steps
-
-#### Step 1 — Provision Infrastructure
-
-```bash
-# Deploy shared resources first
-az deployment group create \
-  --resource-group blueline-rg-shared \
-  --template-file infrastructure/shared.bicep
-
-# Deploy each track
-az deployment group create \
-  --resource-group blueline-rg-quality \
-  --template-file infrastructure/quality-gate.bicep
-
-az deployment group create \
-  --resource-group blueline-rg-security \
-  --template-file infrastructure/security-loop.bicep
-
-az deployment group create \
-  --resource-group blueline-rg-certloop \
-  --template-file infrastructure/cert-loop.bicep
-```
-
-#### Step 2 — Store Secrets in Key Vault
-
-```bash
-az keyvault secret set --vault-name blueline-kv --name "anthropic-api-key" --value "YOUR_KEY"
-az keyvault secret set --vault-name blueline-kv --name "ado-pat" --value "YOUR_PAT"
-az keyvault secret set --vault-name blueline-kv --name "fortify-api-token" --value "YOUR_TOKEN"
-az keyvault secret set --vault-name blueline-kv --name "ca-api-key" --value "YOUR_CA_KEY"
-az keyvault secret set --vault-name blueline-kv --name "teams-webhook-url" --value "YOUR_WEBHOOK"
-```
-
-#### Step 3 — Configure ADO Webhook
-
-In Azure DevOps → Project Settings → Service Hooks → Create subscription:
-- Trigger: `Pull request created` and `Pull request updated`
-- URL: `https://blueline-apim.azure-api.net/webhook/pr`
-- Authentication: API key from Azure API Management
-
-#### Step 4 — Load Coding Standards
-
-Copy `docs/das_review_standards.md` content into the CLARION and LUMEN Function App settings as the `DAS_STANDARDS_CONTENT` environment variable. When standards change, update this variable and restart the Function App — no code deployment needed.
-
-#### Step 5 — Enable Shadow Mode (Initial Rollout)
-
-Set `SHADOW_MODE=true` in all Function App configuration settings. Remove after validation (see Section 13).
-
-#### Step 6 — Configure Azure Monitor Alerts
-
-Set up alerts in Log Analytics for:
-- Any agent function failure → Teams notification
-- Quality Gate not responding to webhooks > 5 minutes → DevOps alert
-- Certificate expiry < 7 days detected → Ops + InfoSec alert
-- BULWARK false positive rate > 20% → Engineering lead weekly report
-
----
-
-## 16. DAS Coding Standards Reference
-
-The file `docs/das_review_standards.md` is the single source of truth for coding standards loaded into CLARION and LUMEN. It covers:
-
-**C# / .NET Standards:**
-- Naming conventions (classes, interfaces, methods, variables, constants)
-- Async/await patterns and threading rules
-- Dependency injection requirements
-- Exception handling patterns
-- Security requirements (no hardcoded secrets, input validation, parameterized queries)
-- Entity Framework usage (AsNoTracking, migration conventions)
-- Logging patterns (structured logging, log levels, what to log)
-- CORS configuration rules
-- API response standards (consistent error format, status codes)
-
-**TypeScript / Angular Standards:**
-- Component naming and file naming
-- Change detection strategy (OnPush required)
-- HTTP client usage (typed services, no direct HttpClient in components)
-- State management patterns
-- Template security (no innerHTML, no bypassSecurityTrust without review)
-- Observable usage and subscription management
-- Module organization
-
-**To update standards:** Edit `docs/das_review_standards.md` and update the Function App `DAS_STANDARDS_CONTENT` environment variable. No code deployment required.
-
----
-
-## 17. Glossary
-
-| Term | Definition |
+| Field | Value |
 |---|---|
-| **Agent** | An autonomous AI-powered software component responsible for one discrete task in a track |
-| **Track** | A named automation pipeline for one of the three problem areas |
-| **ASCENT** | Aggregates CLARION + LUMEN + VECTOR output into one PR recommendation |
-| **BULWARK** | Triages Fortify security findings into severity classifications |
-| **CLARION** | Checks code against .NET and Angular coding standards |
-| **COURIER** | Requests certificate renewal from a Certificate Authority |
-| **FORGE** | Generates a code fix and creates a draft PR for security vulnerabilities |
-| **HARBOUR** | Deploys renewed certificates to IIS servers and Azure App Services |
-| **LUMEN** | Detects code smells and anti-patterns |
-| **REGENT** | Maintains the structured certificate inventory |
-| **STEWARD** | Writes immutable audit log entries for all security decisions |
-| **TIMELINE** | Monitors certificate expiry dates and flags renewals needed |
-| **VECTOR** | Scores code risk and complexity; identifies hotspots for reviewer focus |
-| **WATCHTOWER** | Monitors Fortify SSC for new findings on a schedule |
-| **Shadow Mode** | Operating mode where agents analyse but take no real actions — for validation |
-| **Human Gate** | A mandatory pause requiring explicit human approval before the pipeline continues |
-| **Confidence Score** | A 0.0–1.0 score; below 0.7 the agent escalates to a human instead of acting |
-| **Fortify SSC** | OpenText Fortify Software Security Center — the SAST tool integrated in the Security Loop |
-| **CA** | Certificate Authority — entity that issues SSL/TLS certificates (DigiCert, internal PKI) |
-| **IIS** | Internet Information Services — Microsoft web server used for .NET hosting and cert binding |
-| **WinRM** | Windows Remote Management — used by HARBOUR for remote PowerShell execution on IIS servers |
-| **DAS / CDAS** | Design and Architecture Standards / Coding and Development Architecture Standards — the customer's coding rulebook |
-| **LLM** | Large Language Model — the AI model (Claude via Azure OpenAI) used by all agents |
-| **PR** | Pull Request — a code change submitted for review in Azure DevOps |
-| **WORM** | Write Once Read Many — Azure Blob Storage policy used for immutable audit logs |
-| **MTTR** | Mean Time to Remediate — key metric measuring how fast security findings are fixed |
+| Repo Link | poc/agents/ (BlueLine monorepo) |
+| Environment Mapping | Dev -> QA -> Prod |
+| Dev Environment | Azure Function App (local emulator / dev slot) |
+| QA Environment | Azure Function App (QA slot) |
+| Prod Environment | Azure Function App (Premium plan, always-warm) |
+| Credentials Required | Anthropic API key, Azure DevOps PAT / GitHub token |
+
+### Operations & Visibility
+
+- **Monitoring & Logging:** All agent runs logged to Azure Application Insights (run_id, PR ID, violation count, latency, confidence scores). Alert on error rate > 5%.
+- **Support / Runbook:** If CLARION fails to post comments, check: (1) webhook delivery in Azure DevOps, (2) Function App health, (3) Anthropic API key validity. Retry is idempotent.
+- **Catalogue / Nav:** Register in internal AI agent catalogue under "Quality Gate > CLARION."
+
+### Knowledge & Training
+
+- **Demo Recordings:** To be added after first live PR review demo.
+- **KT / KM Session Links:** To be scheduled with Engineering Lead after QA validation.
+
+### Lifecycle Operations
+
+- **Pause / Restart:** Disable the Azure DevOps webhook subscription to pause CLARION without touching the Function App. Re-enable to restart.
+- **Intern ID Deactivation / Access Cleanup:** Remove intern PAT tokens from Key Vault; rotate shared service principal credentials.
+
+### For Completed Agents
+
+> **Status: In Development** — To be completed upon production sign-off.
 
 ---
 
-*Project BlueLine — Complete Project Documentation v1.0*
-*LTM AI-Led Engineering Team | April 2026*
-*Repository: https://github.com/sagu25/blueline.git*
+## Agent 2: LUMEN
+
+### Core Definition
+
+| Field | Value |
+|---|---|
+| Agent Name | LUMEN |
+| Agent ID | BL-QG-002 |
+| Project Mapping | Project BlueLine — Quality Gate Track |
+| Status Lifecycle | Development -> Testing |
+| Trigger Type | Event-based (PR webhook) |
+| Human Gate | No |
+
+### Problem & Purpose (MANDATORY)
+
+**Agent-Level Problem Statement:**
+Code smells and anti-patterns — duplicated logic, overly complex methods, poor separation of concerns, God classes — are identified inconsistently during PR review. No automated tooling currently flags these structural issues before a human reviewer sees the PR.
+
+**Executive Summary:**
+LUMEN detects code smells and anti-patterns in PR diffs for .NET and Angular codebases. It annotates PRs with identified smells, an explanation of the structural problem, its long-term impact, and a recommended refactor — without blocking the PR.
+
+**Business Value:** Surfaces technical debt at the point of introduction rather than at refactor time; builds shared team understanding of clean-code standards; produces an auditable record of smell occurrences over time.
+
+### Functional Design
+
+**Functional Flow (Step-by-Step):**
+
+1. PR opened/updated — webhook fires — LUMEN receives PR ID (same trigger as CLARION, runs in parallel via Azure Durable Functions fan-out).
+2. LUMEN calls Claude with its code smell system prompt and the PR context.
+3. Claude calls `fetch_pr_diff` to retrieve the full code diff.
+4. Claude analyses the diff for structural issues: duplicated code, long methods, deep nesting, excessive coupling, feature envy, God objects, missing abstractions.
+5. For each smell found, Claude calls `post_pr_comment` with: smell name, location, explanation, impact, refactor suggestion, and confidence score.
+6. LUMEN logs actions and returns AgentResult.
+
+**Inputs / Outputs:**
+
+| | Detail |
+|---|---|
+| Input | PR ID, PR diff (C# / TypeScript files) |
+| Output | Inline PR comments annotating code smells with explanations and refactor suggestions |
+| Output Format | Azure DevOps / GitHub PR review comments |
+
+**Trigger Type:** Event-based (Azure DevOps PR webhook, parallel with CLARION and VECTOR)
+
+### Architecture (MANDATORY)
+
+**Conceptual Diagram:**
+```
+PR Opened
+    |
+    v
+Azure Durable Functions Fan-Out
+    |
+    +-- CLARION (parallel)
+    +-- LUMEN   (parallel)   <- this agent
+    +-- VECTOR  (parallel)
+    |
+    v
+LUMEN analyses diff for code smells
+    +-- Tool: fetch_pr_diff
+    +-- Tool: post_pr_comment
+    |
+    v
+Smell annotations posted to PR
+```
+
+**HLD:** See Diagrams/HLD/LUMEN_HLD.png
+
+**LLD:** See Diagrams/LLD/LUMEN_LLD.png (must be completed before Production)
+
+### AI / Agent Configuration
+
+**Model:** claude-sonnet-4-6 (Anthropic API)
+
+**System Prompt Summary:**
+"You are LUMEN, a code smell and anti-pattern detection agent. Analyse the PR diff for: God classes, long methods (>40 lines), deep nesting (>3 levels), duplicated code blocks, feature envy, inappropriate intimacy, data clumps, and primitive obsession. For each smell found: name it, locate it precisely, explain why it is a smell, describe its long-term impact, and suggest a concrete refactor. Confidence must be >= 0.7 to flag."
+
+**Prompt Caching:** Enabled.
+
+**Tools / API Specifications:**
+
+| Tool | API | Description |
+|---|---|---|
+| `fetch_pr_diff` | Azure DevOps REST API / GitHub API | Fetches the full PR diff |
+| `post_pr_comment` | Azure DevOps REST API / GitHub API | Posts inline smell annotation |
+
+### Engineering & Access
+
+| Field | Value |
+|---|---|
+| Repo Link | poc/agents/ (BlueLine monorepo) |
+| Environment Mapping | Dev -> QA -> Prod |
+| Credentials Required | Anthropic API key, Azure DevOps PAT / GitHub token |
+
+### Operations & Visibility
+
+- **Monitoring & Logging:** Azure Application Insights — smell count per PR, confidence distribution, latency.
+- **Support / Runbook:** Same runbook as CLARION (shared webhook and Function App).
+- **Catalogue:** Register in internal AI agent catalogue under "Quality Gate > LUMEN."
+
+### Knowledge & Training
+
+- **Demo Recordings:** To be added.
+- **KT / KM Session Links:** To be scheduled.
+
+### Lifecycle Operations
+
+- **Pause / Restart:** Disable from the Durable Functions orchestrator configuration. CLARION and VECTOR continue to operate independently.
+- **Intern ID Deactivation / Access Cleanup:** Rotate shared service principal credentials.
+
+### For Completed Agents
+
+> **Status: In Development.**
+
+---
+
+## Agent 3: VECTOR
+
+### Core Definition
+
+| Field | Value |
+|---|---|
+| Agent Name | VECTOR |
+| Agent ID | BL-QG-003 |
+| Project Mapping | Project BlueLine — Quality Gate Track |
+| Status Lifecycle | Development -> Testing |
+| Trigger Type | Event-based (PR webhook) |
+| Human Gate | No |
+
+### Problem & Purpose (MANDATORY)
+
+**Agent-Level Problem Statement:**
+Human reviewers have no objective signal about which files in a PR carry the most risk or complexity. High-risk files are reviewed with the same attention as trivial ones, causing reviewers to miss critical areas.
+
+**Executive Summary:**
+VECTOR scores each changed file in a PR for risk and complexity using git history (churn rate, bug-fix frequency) and static analysis (cyclomatic complexity, coupling). It posts a per-file risk summary and flags high-risk files so the human reviewer knows where to focus attention.
+
+**Business Value:** Concentrates human review effort on highest-risk code; quantifies risk objectively; reduces probability of critical bugs reaching production.
+
+### Functional Design
+
+**Functional Flow (Step-by-Step):**
+
+1. PR webhook fires — VECTOR receives PR ID (runs in parallel with CLARION and LUMEN).
+2. VECTOR calls Claude with risk scoring instructions.
+3. Claude calls `fetch_pr_diff` to retrieve changed files.
+4. Claude calls `query_git_history` for each changed file to get churn rate and bug-fix commit frequency.
+5. Claude calculates a risk score (0.0-1.0) per file combining churn, complexity, and coupling signals.
+6. Claude calls `post_pr_comment` with a risk summary table and attention flags on high-risk files (score >= 0.7).
+7. VECTOR returns AgentResult with risk scores for ASCENT to consume.
+
+**Inputs / Outputs:**
+
+| | Detail |
+|---|---|
+| Input | PR ID, PR diff, git history for changed files |
+| Output | Per-file risk score (0.0-1.0), reviewer attention flags on high-risk files |
+| Output Format | PR comment with risk summary table |
+
+**Trigger Type:** Event-based (parallel with CLARION and LUMEN)
+
+### Architecture (MANDATORY)
+
+**Conceptual Diagram:**
+```
+PR Opened
+    |
+    v
+VECTOR (parallel in Durable Functions fan-out)
+    +-- Tool: fetch_pr_diff
+    +-- Tool: query_git_history --> Azure DevOps / GitHub API (per file)
+    +-- Tool: post_pr_comment --> Risk table posted to PR
+    |
+    v
+Risk scores returned to ASCENT orchestrator
+```
+
+**HLD:** See Diagrams/HLD/VECTOR_HLD.png
+
+**LLD:** See Diagrams/LLD/VECTOR_LLD.png (must be completed before Production)
+
+### AI / Agent Configuration
+
+**Model:** claude-sonnet-4-6 (Anthropic API)
+
+**System Prompt Summary:**
+"You are VECTOR, a code risk and complexity scoring agent. For each file in the PR diff, calculate a risk score (0.0-1.0) based on: git churn rate (commits per month), bug-fix commit frequency, cyclomatic complexity of changed methods, and coupling to other modules. Score >= 0.7 = HIGH RISK (flag for reviewer attention). Output a risk table and flag high-risk files with a brief explanation of why they are high risk."
+
+**Tools / API Specifications:**
+
+| Tool | API | Description |
+|---|---|---|
+| `fetch_pr_diff` | Azure DevOps / GitHub API | Fetches changed files |
+| `query_git_history` | Azure DevOps / GitHub API | Fetches commit history, churn rate per file |
+| `post_pr_comment` | Azure DevOps / GitHub API | Posts risk summary table |
+
+### Engineering & Access
+
+| Field | Value |
+|---|---|
+| Repo Link | poc/agents/ (BlueLine monorepo) |
+| Environment Mapping | Dev -> QA -> Prod |
+| Credentials Required | Anthropic API key, Azure DevOps PAT / GitHub token |
+
+### Operations & Visibility
+
+- **Monitoring & Logging:** Azure Application Insights — risk score distribution, high-risk file count per PR, latency.
+- **Support / Runbook:** Git history API calls may be rate-limited on large PRs — monitor for 429 responses and configure exponential backoff.
+- **Catalogue:** Register under "Quality Gate > VECTOR."
+
+### Knowledge & Training
+
+- **Demo Recordings:** To be added.
+- **KT / KM Session Links:** To be scheduled.
+
+### Lifecycle Operations
+
+- **Pause / Restart:** Disable from Durable Functions orchestrator. Other Quality Gate agents continue unaffected.
+- **Intern ID Deactivation:** Rotate service principal.
+
+### For Completed Agents
+
+> **Status: In Development.**
+
+---
+
+## Agent 4: ASCENT
+
+### Core Definition
+
+| Field | Value |
+|---|---|
+| Agent Name | ASCENT |
+| Agent ID | BL-QG-004 |
+| Project Mapping | Project BlueLine — Quality Gate Track |
+| Status Lifecycle | Development -> Testing |
+| Trigger Type | Event-based (triggered after CLARION + LUMEN + VECTOR complete) |
+| Human Gate | Yes — PR approval required before merge |
+
+### Problem & Purpose (MANDATORY)
+
+**Agent-Level Problem Statement:**
+CLARION, LUMEN, and VECTOR each post separate comments to a PR, creating noise and requiring reviewers to mentally aggregate three different outputs. There is no consolidated summary telling the reviewer what to focus on or what the overall quality gate outcome is.
+
+**Executive Summary:**
+ASCENT aggregates the outputs of CLARION, LUMEN, and VECTOR after all three complete in parallel. It posts a single consolidated PR summary comment with: overall quality gate outcome (Pass / Review Required / Fail), prioritised findings list (critical first), key risk flags, and actionable next steps for the developer.
+
+**Business Value:** Provides a single, clear quality gate signal per PR; reduces reviewer cognitive overhead; creates a machine-readable quality record for trend analysis and continuous improvement.
+
+### Functional Design
+
+**Functional Flow (Step-by-Step):**
+
+1. Azure Durable Functions orchestrator confirms CLARION + LUMEN + VECTOR have all completed.
+2. ASCENT receives all three AgentResult objects.
+3. Claude aggregates findings: de-duplicates overlapping issues, prioritises by severity, assigns overall gate outcome.
+4. Claude calls `post_pr_summary_comment` with the consolidated review.
+5. Claude calls `read_ado_reactions` to collect developer feedback on past comments (for quality improvement loop).
+6. ASCENT logs the aggregated result and publishes metrics to Application Insights.
+
+**Inputs / Outputs:**
+
+| | Detail |
+|---|---|
+| Input | AgentResult from CLARION, LUMEN, and VECTOR |
+| Output | Consolidated PR summary comment; overall gate outcome; quality metrics |
+| Output Format | PR summary comment; Application Insights metrics |
+
+**Trigger Type:** Event-based (Durable Functions — waits for all three parallel agents to complete)
+
+### Architecture (MANDATORY)
+
+**Conceptual Diagram:**
+```
+CLARION result --+
+LUMEN result    -+--> ASCENT (Azure Durable Functions aggregator)
+VECTOR result  --+         |
+                    +-- Aggregates, prioritises, de-duplicates
+                    +-- Tool: post_pr_summary_comment
+                    +-- Tool: read_ado_reactions (feedback loop)
+                           |
+                    Consolidated PR summary posted
+                    Human reviewer approves/rejects
+```
+
+**HLD:** See Diagrams/HLD/ASCENT_HLD.png
+
+**LLD:** See Diagrams/LLD/ASCENT_LLD.png (must be completed before Production)
+
+### AI / Agent Configuration
+
+**Model:** claude-sonnet-4-6 (Anthropic API)
+
+**System Prompt Summary:**
+"You are ASCENT, the Quality Gate aggregator. You receive structured findings from CLARION (standards violations), LUMEN (code smells), and VECTOR (risk scores). Your job: de-duplicate overlapping findings, prioritise by severity (CRITICAL > HIGH > MEDIUM > LOW), and produce one consolidated review summary. Assign an overall gate outcome: PASS (no critical/high findings), REVIEW REQUIRED (medium findings present), or FAIL (critical findings present)."
+
+**Tools / API Specifications:**
+
+| Tool | API | Description |
+|---|---|---|
+| `post_pr_summary_comment` | Azure DevOps / GitHub API | Posts the consolidated summary to the PR |
+| `read_ado_reactions` | Azure DevOps API | Reads thumbs-up/down on existing comments for feedback loop |
+
+### Engineering & Access
+
+| Field | Value |
+|---|---|
+| Repo Link | poc/agents/ (BlueLine monorepo) |
+| Environment Mapping | Dev -> QA -> Prod |
+| Credentials Required | Anthropic API key, Azure DevOps PAT / GitHub token |
+
+### Operations & Visibility
+
+- **Monitoring & Logging:** Application Insights — gate outcome distribution (Pass/Review Required/Fail ratio), findings per PR, aggregation latency.
+- **Support / Runbook:** If ASCENT times out waiting for parallel agents, check Durable Functions task hub state. Replay the orchestration from the last checkpoint.
+- **Catalogue:** Register under "Quality Gate > ASCENT."
+
+### Knowledge & Training
+
+- **Demo Recordings:** To be added.
+- **KT / KM Session Links:** To be scheduled.
+
+### Lifecycle Operations
+
+- **Pause / Restart:** Disable the Durable Functions orchestrator trigger. Individual agents will still run but no summary will be posted.
+- **Intern ID Deactivation:** Rotate service principal credentials.
+
+### For Completed Agents
+
+> **Status: In Development.**
+
+---
+
+## Agent 5: BULWARK
+
+### Core Definition
+
+| Field | Value |
+|---|---|
+| Agent Name | BULWARK |
+| Agent ID | BL-SEC-001 |
+| Project Mapping | Project BlueLine — Security Track |
+| Status Lifecycle | Development -> Testing |
+| Trigger Type | Pipeline event (on commit) or Scheduled (WATCHTOWER trigger) |
+| Human Gate | No |
+
+### Problem & Purpose (MANDATORY)
+
+**Agent-Level Problem Statement:**
+Fortify SSC generates large lists of vulnerability findings that engineers must manually review, classify (real vs. false positive), and prioritise. This triage process is time-consuming and inconsistent — different engineers make different classification decisions for similar findings.
+
+**Executive Summary:**
+BULWARK fetches current Fortify SSC findings and uses AI reasoning to classify each finding as CRITICAL, HIGH, NEEDS_REVIEW, or FALSE_POSITIVE. It applies OWASP Top 10 knowledge, the specific codebase context, and triage rules to produce a structured, prioritised finding list — dramatically reducing the time engineers spend on manual triage.
+
+**Business Value:** Eliminates manual Fortify triage; provides consistent, documented classification decisions; surfaces critical vulnerabilities immediately; creates an auditable triage record.
+
+### Functional Design
+
+**Functional Flow (Step-by-Step):**
+
+1. CI/CD pipeline completes OR WATCHTOWER detects new findings and publishes to Service Bus topic `security.findings.new`.
+2. BULWARK picks up the message from Service Bus.
+3. BULWARK calls `fetch_fortify_findings` to retrieve the full finding list from Fortify SSC.
+4. Claude analyses each finding: vulnerability class, CVSS score, affected component, exploitability context.
+5. Claude classifies each finding: CRITICAL / HIGH / NEEDS_REVIEW / FALSE_POSITIVE with documented rationale.
+6. BULWARK calls `suppress_fortify_issue` for FALSE_POSITIVE findings (with rationale written to Fortify).
+7. CRITICAL findings are published to Service Bus topic `security.critical.fix-needed` for FORGE to consume.
+8. All classified findings published to `security.findings.classified` for STEWARD.
+
+**Inputs / Outputs:**
+
+| | Detail |
+|---|---|
+| Input | Fortify SSC finding list (finding ID, vulnerability class, affected file/line, CVSS score) |
+| Output | Classified finding list (CRITICAL / HIGH / NEEDS_REVIEW / FALSE_POSITIVE with rationale) |
+| Output Format | Service Bus messages; Fortify SSC suppression records |
+
+**Trigger Type:** Pipeline event + Scheduled (via WATCHTOWER)
+
+### Architecture (MANDATORY)
+
+**Conceptual Diagram:**
+```
+CI/CD Pipeline OR WATCHTOWER
+    |
+    v
+Service Bus: security.findings.new
+    |
+    v
+BULWARK (Azure Function)
+    +-- Tool: fetch_fortify_findings --> Fortify SSC REST API
+    +-- AI Triage: CRITICAL / HIGH / NEEDS_REVIEW / FALSE_POSITIVE
+    +-- Tool: suppress_fortify_issue --> Fortify SSC REST API (FALSE_POSITIVEs)
+    +-- Publish: security.critical.fix-needed --> FORGE
+    +-- Publish: security.findings.classified --> STEWARD
+```
+
+**HLD:** See Diagrams/HLD/BULWARK_HLD.png
+
+**LLD:** See Diagrams/LLD/BULWARK_LLD.png (must be completed before Production)
+
+### AI / Agent Configuration
+
+**Model:** claude-sonnet-4-6 (Anthropic API)
+
+**System Prompt Summary:**
+"You are BULWARK, a security vulnerability triage agent. For each Fortify finding, classify it as: CRITICAL (exploitable, high impact, confirmed), HIGH (likely real, significant impact), NEEDS_REVIEW (uncertain — escalate to human), or FALSE_POSITIVE (confirmed not exploitable with documented rationale). Never classify as FALSE_POSITIVE if uncertain — prefer NEEDS_REVIEW. Apply OWASP Top 10 knowledge. Always document your classification rationale."
+
+**Prompt Caching:** Enabled — OWASP knowledge base and triage rules cached.
+
+**Tools / API Specifications:**
+
+| Tool | API | Description |
+|---|---|---|
+| `fetch_fortify_findings` | Fortify SSC REST API | Retrieves current finding list |
+| `suppress_fortify_issue` | Fortify SSC REST API | Suppresses a finding with documented rationale |
+| `publish_to_service_bus` | Azure Service Bus SDK | Publishes classified findings to downstream agents |
+
+### Engineering & Access
+
+| Field | Value |
+|---|---|
+| Repo Link | poc/agents/bulwark.py (BlueLine monorepo) |
+| Environment Mapping | Dev -> QA -> Prod |
+| Credentials Required | Anthropic API key, Fortify SSC API token, Azure Service Bus connection string |
+
+### Operations & Visibility
+
+- **Monitoring & Logging:** Application Insights — finding counts per classification, false positive rate, triage latency. Alert if CRITICAL finding count spikes unexpectedly.
+- **Support / Runbook:** If Fortify SSC API is unavailable, BULWARK will retry with exponential backoff (3 retries). After exhaustion, publish to dead-letter queue for manual processing.
+- **Catalogue:** Register under "Security Track > BULWARK."
+
+### Knowledge & Training
+
+- **Demo Recordings:** To be added.
+- **KT / KM Session Links:** To be scheduled with InfoSec team.
+
+### Lifecycle Operations
+
+- **Pause / Restart:** Disable the Service Bus subscription trigger on the BULWARK Function. Messages will accumulate in the queue and be processed when re-enabled (no data loss).
+- **Intern ID Deactivation:** Revoke Fortify SSC API token for intern accounts; rotate shared service principal.
+
+### For Completed Agents
+
+> **Status: In Development.**
+
+---
+
+## Agent 6: WATCHTOWER
+
+### Core Definition
+
+| Field | Value |
+|---|---|
+| Agent Name | WATCHTOWER |
+| Agent ID | BL-SEC-002 |
+| Project Mapping | Project BlueLine — Security Track |
+| Status Lifecycle | Development -> Testing |
+| Trigger Type | Scheduled (Azure Timer) |
+| Human Gate | No |
+
+### Problem & Purpose (MANDATORY)
+
+**Agent-Level Problem Statement:**
+Fortify scans are triggered manually or on an ad-hoc basis. There is no automated mechanism to ensure scans run on a regular schedule, detect when new findings have appeared since the last scan, or alert the team immediately when new vulnerabilities are introduced.
+
+**Executive Summary:**
+WATCHTOWER runs on a schedule, monitors Fortify SSC for scan completion and new findings, triggers scans when needed, and immediately notifies BULWARK via Service Bus when new findings appear — ensuring the security pipeline is continuously active without manual intervention.
+
+**Business Value:** Ensures continuous security monitoring; eliminates the risk of findings going unnoticed between manual scan runs; provides real-time new-finding alerting.
+
+### Functional Design
+
+**Functional Flow (Step-by-Step):**
+
+1. Azure Timer fires on schedule (configurable; default: every 4 hours).
+2. WATCHTOWER calls `list_fortify_projects` to get the active project list.
+3. For each project, WATCHTOWER calls `fetch_scan_status` to check last scan timestamp and completion status.
+4. If scan is overdue (configurable threshold), WATCHTOWER calls `trigger_fortify_scan`.
+5. WATCHTOWER calls `fetch_new_findings_since_last_run` — compares current findings with last stored snapshot.
+6. If new findings exist, WATCHTOWER publishes to Service Bus topic `security.findings.new` to trigger BULWARK.
+7. WATCHTOWER updates the stored snapshot in Azure Blob Storage.
+
+**Inputs / Outputs:**
+
+| | Detail |
+|---|---|
+| Input | Fortify SSC project list, scan status, finding snapshots (from Azure Blob) |
+| Output | Service Bus message to BULWARK (if new findings); scan trigger (if overdue) |
+| Trigger Type | Scheduled (Azure Timer — configurable interval) |
+
+### Architecture (MANDATORY)
+
+**Conceptual Diagram:**
+```
+Azure Timer (scheduled)
+    |
+    v
+WATCHTOWER (Azure Function)
+    +-- Tool: list_fortify_projects --> Fortify SSC REST API
+    +-- Tool: fetch_scan_status --> Fortify SSC REST API
+    +-- Tool: trigger_fortify_scan --> Fortify SSC REST API (if overdue)
+    +-- Tool: fetch_new_findings_since_last_run --> Fortify SSC API + Blob snapshot
+    +-- Publish: security.findings.new --> Service Bus --> BULWARK
+```
+
+**HLD:** See Diagrams/HLD/WATCHTOWER_HLD.png
+
+**LLD:** See Diagrams/LLD/WATCHTOWER_LLD.png (must be completed before Production)
+
+### AI / Agent Configuration
+
+**Model:** claude-sonnet-4-6 (Anthropic API, lightweight usage)
+
+**System Prompt Summary:**
+"You are WATCHTOWER, a Fortify scan monitoring agent. Your job is to: (1) check whether scans are running on schedule, (2) detect new findings since the last run, (3) trigger scans if overdue. You are not responsible for triaging findings — that is BULWARK's role. When in doubt, alert rather than suppress."
+
+**Tools / API Specifications:**
+
+| Tool | API | Description |
+|---|---|---|
+| `list_fortify_projects` | Fortify SSC REST API | Lists active Fortify projects |
+| `fetch_scan_status` | Fortify SSC REST API | Gets last scan timestamp and status |
+| `trigger_fortify_scan` | Fortify SSC REST API | Triggers a new scan |
+| `fetch_new_findings_since_last_run` | Fortify SSC REST API + Blob Storage | Compares current findings to last snapshot |
+| `publish_to_service_bus` | Azure Service Bus SDK | Notifies BULWARK of new findings |
+
+### Engineering & Access
+
+| Field | Value |
+|---|---|
+| Repo Link | poc/agents/ (BlueLine monorepo) |
+| Environment Mapping | Dev -> QA -> Prod |
+| Credentials Required | Anthropic API key, Fortify SSC API token, Azure Service Bus connection string, Azure Blob Storage connection |
+
+### Operations & Visibility
+
+- **Monitoring & Logging:** Application Insights — scan frequency, new-finding detection events, trigger count, Service Bus publish success rate.
+- **Support / Runbook:** If Fortify SSC is unavailable, WATCHTOWER logs the failure and skips the cycle (no alert storm). Manual fallback: trigger BULWARK directly via Service Bus test message.
+- **Catalogue:** Register under "Security Track > WATCHTOWER."
+
+### Knowledge & Training
+
+- **Demo Recordings:** To be added.
+- **KT / KM Session Links:** To be scheduled.
+
+### Lifecycle Operations
+
+- **Pause / Restart:** Disable the Azure Timer trigger on the Function. Re-enable to resume scheduled monitoring.
+- **Intern ID Deactivation:** Revoke Fortify SSC API token; rotate service principal.
+
+### For Completed Agents
+
+> **Status: In Development.**
+
+---
+
+## Agent 7: FORGE
+
+### Core Definition
+
+| Field | Value |
+|---|---|
+| Agent Name | FORGE |
+| Agent ID | BL-SEC-003 |
+| Project Mapping | Project BlueLine — Security Track |
+| Status Lifecycle | Development -> Testing |
+| Trigger Type | Event-based (BULWARK Service Bus output) |
+| Human Gate | Yes — draft fix PRs require human review and approval before merge |
+
+### Problem & Purpose (MANDATORY)
+
+**Agent-Level Problem Statement:**
+When Fortify identifies a critical vulnerability, an engineer must manually read the finding, understand the vulnerable code, research the correct fix, implement it, write a test, and open a PR. This process is slow, expertise-dependent, and creates a backlog of unresolved security findings.
+
+**Executive Summary:**
+FORGE receives CRITICAL findings from BULWARK, reads the vulnerable source code, generates a targeted code fix applying the correct security pattern, writes a unit test covering the fix, commits to a new branch, and opens a draft PR — ready for human engineer review and approval.
+
+**Business Value:** Dramatically accelerates remediation of critical vulnerabilities; produces consistent, documented fixes; reduces the expertise barrier for junior engineers; creates an auditable fix trail.
+
+### Functional Design
+
+**Functional Flow (Step-by-Step):**
+
+1. BULWARK publishes CRITICAL finding to Service Bus topic `security.critical.fix-needed`.
+2. FORGE picks up the message.
+3. Claude calls `get_file_content` to read the vulnerable source file.
+4. Claude analyses the vulnerability class and generates the corrected code.
+5. Claude generates a unit test covering the fix.
+6. FORGE calls `create_branch` (branch name: blueline/forge/fix-{finding-id}).
+7. FORGE calls `commit_files` with the fixed source file and test file.
+8. FORGE calls `create_pull_request` — creates a DRAFT PR (cannot be auto-merged).
+9. FORGE publishes the fix event to `security.findings.classified` for STEWARD to log.
+
+**Inputs / Outputs:**
+
+| | Detail |
+|---|---|
+| Input | CRITICAL finding (finding ID, vulnerability class, affected file/line, CVSS score) from BULWARK |
+| Output | Draft PR containing: fixed source file, unit test, PR description with finding reference |
+| Output Format | Azure DevOps / GitHub draft PR |
+
+**Trigger Type:** Event-based (Azure Service Bus `security.critical.fix-needed`)
+
+### Architecture (MANDATORY)
+
+**Conceptual Diagram:**
+```
+BULWARK --> Service Bus: security.critical.fix-needed
+    |
+    v
+FORGE (Azure Function)
+    +-- Tool: get_file_content --> Source control API
+    +-- AI: Generate fix + unit test
+    +-- Tool: create_branch --> Azure DevOps / GitHub API
+    +-- Tool: commit_files --> Azure DevOps / GitHub API
+    +-- Tool: create_pull_request (DRAFT) --> Azure DevOps / GitHub API
+    |
+    v
+Draft PR created --> Human engineer reviews and approves
+    |
+    v
+STEWARD logs the fix event
+```
+
+**HLD:** See Diagrams/HLD/FORGE_HLD.png
+
+**LLD:** See Diagrams/LLD/FORGE_LLD.png (must be completed before Production)
+
+### AI / Agent Configuration
+
+**Model:** claude-sonnet-4-6 (Anthropic API)
+
+**System Prompt Summary:**
+"You are FORGE, a security fix generation agent. You receive a confirmed critical vulnerability finding and the vulnerable source code. Generate a correct, minimal fix that addresses the vulnerability without breaking existing functionality. Apply the correct security pattern for the vulnerability class (SQL injection: parameterised queries; XSS: output encoding; SSRF: allowlist validation). Also generate a unit test that proves the vulnerability is fixed. Never generate a fix you are not confident in — if uncertain, write a stub PR with a TODO and escalate."
+
+**Tools / API Specifications:**
+
+| Tool | API | Description |
+|---|---|---|
+| `get_file_content` | Azure DevOps / GitHub API | Reads vulnerable source file |
+| `create_branch` | Azure DevOps / GitHub API | Creates fix branch |
+| `commit_files` | Azure DevOps / GitHub API | Commits fixed file + test |
+| `create_pull_request` | Azure DevOps / GitHub API | Opens draft PR |
+| `publish_to_service_bus` | Azure Service Bus SDK | Notifies STEWARD |
+
+### Engineering & Access
+
+| Field | Value |
+|---|---|
+| Repo Link | poc/agents/ (BlueLine monorepo) |
+| Environment Mapping | Dev -> QA -> Prod |
+| Credentials Required | Anthropic API key, Azure DevOps PAT / GitHub token, Azure Service Bus connection string |
+
+### Operations & Visibility
+
+- **Monitoring & Logging:** Application Insights — fix generation success rate, PR creation count, latency per finding, confidence score distribution.
+- **Support / Runbook:** If FORGE creates a PR that the engineer considers incorrect, the engineer closes the draft PR and adds a comment. ASCENT's feedback loop will use this rejection to improve future outputs.
+- **Catalogue:** Register under "Security Track > FORGE."
+
+### Knowledge & Training
+
+- **Demo Recordings:** To be added.
+- **KT / KM Session Links:** To be scheduled with InfoSec and Engineering Lead.
+
+### Lifecycle Operations
+
+- **Pause / Restart:** Disable the Service Bus subscription trigger. CRITICAL findings will accumulate in the queue and be processed when FORGE is re-enabled.
+- **Intern ID Deactivation:** Revoke Azure DevOps PAT tokens; rotate service principal.
+
+### For Completed Agents
+
+> **Status: In Development.**
+
+---
+
+## Agent 8: STEWARD
+
+### Core Definition
+
+| Field | Value |
+|---|---|
+| Agent Name | STEWARD |
+| Agent ID | BL-SEC-004 |
+| Project Mapping | Project BlueLine — Security Track |
+| Status Lifecycle | Development -> Testing |
+| Trigger Type | Event-based (all Security Track Service Bus events) |
+| Human Gate | No |
+
+### Problem & Purpose (MANDATORY)
+
+**Agent-Level Problem Statement:**
+AI-driven security decisions (triage classifications, suppression rationale, fix generation) produce no auditable record in the current manual process. There is no structured log showing who (or what) decided to suppress a finding, why, and when.
+
+**Executive Summary:**
+STEWARD subscribes to all Security Track Service Bus events and writes an immutable, structured audit log entry for every security decision made by BULWARK, FORGE, and WATCHTOWER. Logs are written to Azure Blob Storage (append-only) and reviewed periodically by InfoSec.
+
+**Business Value:** Provides a complete, immutable audit trail for all AI security decisions; satisfies compliance and governance requirements; enables InfoSec to review and validate AI triage accuracy over time.
+
+### Functional Design
+
+**Functional Flow (Step-by-Step):**
+
+1. STEWARD subscribes to all Security Track topics on Azure Service Bus.
+2. On receiving any security event, STEWARD parses the event type (triage result, suppression, fix PR created, scan triggered).
+3. Claude formats the event into a structured audit log entry (JSON schema).
+4. STEWARD calls `write_audit_log` — appends the entry to an immutable append-only blob in Azure Blob Storage.
+5. STEWARD returns acknowledgement to Service Bus (message removed from queue).
+
+**Inputs / Outputs:**
+
+| | Detail |
+|---|---|
+| Input | All Security Track Service Bus events (from BULWARK, FORGE, WATCHTOWER) |
+| Output | Structured JSON audit log entries in Azure Blob Storage (immutable, append-only) |
+| Output Format | JSON log files in Azure Blob (one file per day) |
+
+**Trigger Type:** Event-based (Azure Service Bus — all security topics)
+
+### Architecture (MANDATORY)
+
+**Conceptual Diagram:**
+```
+BULWARK events  --+
+FORGE events      +--> Service Bus (all security topics)
+WATCHTOWER events--+         |
+                             v
+                        STEWARD (Azure Function)
+                        +-- Parses event type
+                        +-- AI: Formats structured log entry
+                        +-- Tool: write_audit_log --> Azure Blob Storage (append-only)
+```
+
+**HLD:** See Diagrams/HLD/STEWARD_HLD.png
+
+**LLD:** See Diagrams/LLD/STEWARD_LLD.png (must be completed before Production)
+
+### AI / Agent Configuration
+
+**Model:** claude-sonnet-4-6 (Anthropic API, lightweight — primarily formatting)
+
+**System Prompt Summary:**
+"You are STEWARD, an audit log writer. Convert the incoming security event into a structured JSON audit log entry following the audit schema. Include: timestamp (UTC), event type, agent ID, finding ID (if applicable), decision made, rationale, confidence score, and outcome. Never omit fields. Never modify or reinterpret the decision — record it exactly as made."
+
+**Tools / API Specifications:**
+
+| Tool | API | Description |
+|---|---|---|
+| `write_audit_log` | Azure Blob Storage SDK | Appends structured JSON entry to daily audit log blob |
+
+### Engineering & Access
+
+| Field | Value |
+|---|---|
+| Repo Link | poc/agents/ (BlueLine monorepo) |
+| Environment Mapping | Dev -> QA -> Prod |
+| Credentials Required | Anthropic API key, Azure Blob Storage connection string, Azure Service Bus connection string |
+
+### Operations & Visibility
+
+- **Monitoring & Logging:** Application Insights — log write success rate, latency, message count per event type.
+- **Support / Runbook:** If Blob Storage is unavailable, messages will dead-letter in Service Bus. On recovery, replay dead-letter messages — STEWARD processing is idempotent.
+- **Catalogue:** Register under "Security Track > STEWARD."
+
+### Knowledge & Training
+
+- **Demo Recordings:** To be added.
+- **KT / KM Session Links:** To be scheduled with InfoSec team.
+
+### Lifecycle Operations
+
+- **Pause / Restart:** Disable Service Bus subscription. Messages accumulate; replay on re-enable.
+- **Intern ID Deactivation:** Rotate Azure Blob Storage access keys (use Managed Identity in production).
+
+### For Completed Agents
+
+> **Status: In Development.**
+
+---
+
+## Agent 9: TIMELINE
+
+### Core Definition
+
+| Field | Value |
+|---|---|
+| Agent Name | TIMELINE |
+| Agent ID | BL-CERT-001 |
+| Project Mapping | Project BlueLine — Certificate Loop Track |
+| Status Lifecycle | Design -> Development |
+| Trigger Type | Scheduled (Azure Timer — daily) |
+| Human Gate | No |
+
+### Problem & Purpose (MANDATORY)
+
+**Agent-Level Problem Statement:**
+SSL/TLS certificate expiry dates are tracked manually via spreadsheets and email alerts. Engineers often discover expiry risks late, leaving insufficient time for renewal — particularly for external certificates that require InfoSec involvement and can take days to weeks to issue.
+
+**Executive Summary:**
+TIMELINE runs daily, queries Azure Key Vault for all managed certificate metadata, identifies certificates expiring within a configurable threshold (default: 30 days), and generates renewal work items for REGENT to process — providing at least 30 days of buffer for all renewal actions to complete.
+
+**Business Value:** Eliminates manual expiry tracking; provides automated early warning >= 30 days before expiry; prevents certificate expiry incidents.
+
+### Functional Design
+
+**Functional Flow (Step-by-Step):**
+
+1. Azure Timer fires daily at a configured time (e.g., 06:00 UTC).
+2. TIMELINE calls `list_keyvault_certificates` to get all certificates with metadata.
+3. Claude evaluates each certificate's expiry date against the current date.
+4. Certificates expiring within 30 days are flagged as RENEWAL_REQUIRED.
+5. Certificates expiring within 7 days are flagged as URGENT.
+6. TIMELINE generates a renewal work item for each flagged certificate.
+7. Work items are published to Service Bus topic `cert.renewal.required` for REGENT.
+8. TIMELINE logs the daily scan result to Application Insights.
+
+**Inputs / Outputs:**
+
+| | Detail |
+|---|---|
+| Input | Azure Key Vault certificate list (name, expiry date, subject, CA type, environment) |
+| Output | Renewal work items (cert name, expiry date, urgency, CA type, environment list) |
+| Output Format | Service Bus messages to REGENT |
+
+**Trigger Type:** Scheduled (Azure Timer — daily)
+
+### Architecture (MANDATORY)
+
+**Conceptual Diagram:**
+```
+Azure Timer (daily)
+    |
+    v
+TIMELINE (Azure Function)
+    +-- Tool: list_keyvault_certificates --> Azure Key Vault API
+    +-- AI: Evaluate expiry, classify urgency (NORMAL / URGENT)
+    +-- Publish: cert.renewal.required --> Service Bus --> REGENT
+```
+
+**HLD:** See Diagrams/HLD/TIMELINE_HLD.png
+
+**LLD:** See Diagrams/LLD/TIMELINE_LLD.png (must be completed before Production)
+
+### AI / Agent Configuration
+
+**Model:** claude-sonnet-4-6 (Anthropic API)
+
+**System Prompt Summary:**
+"You are TIMELINE, a certificate expiry monitoring agent. Query the certificate inventory and identify certificates expiring within 30 days. Mark certificates expiring within 7 days as URGENT. For each flagged certificate, produce a renewal work item containing: certificate name, current expiry date, CA type (internal/external), affected environments, and urgency level. Do not generate work items for certificates not yet within the threshold."
+
+**Tools / API Specifications:**
+
+| Tool | API | Description |
+|---|---|---|
+| `list_keyvault_certificates` | Azure Key Vault REST API | Lists all managed certificates with expiry metadata |
+| `publish_to_service_bus` | Azure Service Bus SDK | Publishes renewal work items to REGENT |
+
+### Engineering & Access
+
+| Field | Value |
+|---|---|
+| Repo Link | poc/agents/timeline.py (BlueLine monorepo) |
+| Environment Mapping | Dev -> QA -> Prod |
+| Credentials Required | Anthropic API key, Azure Key Vault access (Managed Identity preferred), Azure Service Bus connection string |
+
+### Operations & Visibility
+
+- **Monitoring & Logging:** Application Insights — certificate count scanned, renewal work items generated, URGENT count, daily scan latency.
+- **Support / Runbook:** If Key Vault is unavailable, TIMELINE logs the failure and sends an alert to the Operations team. Manual fallback: check Key Vault directly via Azure Portal.
+- **Catalogue:** Register under "Certificate Loop > TIMELINE."
+
+### Knowledge & Training
+
+- **Demo Recordings:** To be added.
+- **KT / KM Session Links:** To be scheduled with Operations team.
+
+### Lifecycle Operations
+
+- **Pause / Restart:** Disable the Azure Timer trigger. On resume, TIMELINE will run at the next scheduled interval and catch up with any certificates that entered the expiry window during the pause.
+- **Intern ID Deactivation:** Revoke Key Vault access policy entries for intern accounts; prefer Managed Identity for service access.
+
+### For Completed Agents
+
+> **Status: In Design.**
+
+---
+
+## Agent 10: REGENT
+
+### Core Definition
+
+| Field | Value |
+|---|---|
+| Agent Name | REGENT |
+| Agent ID | BL-CERT-002 |
+| Project Mapping | Project BlueLine — Certificate Loop Track |
+| Status Lifecycle | Design -> Development |
+| Trigger Type | Event-based (TIMELINE Service Bus output) |
+| Human Gate | No |
+
+### Problem & Purpose (MANDATORY)
+
+**Agent-Level Problem Statement:**
+There is no centralised, machine-readable inventory of all SSL/TLS certificates — their owners, environments, CA type, and renewal history. This makes automated renewal orchestration impossible and forces engineers to rely on institutional knowledge.
+
+**Executive Summary:**
+REGENT maintains the structured certificate inventory in Azure Table Storage. On receiving a renewal work item from TIMELINE, REGENT enriches it with ownership, CA contact, environment list, and last-renewal history — producing a complete renewal record that COURIER can act on.
+
+**Business Value:** Creates and maintains the single source of truth for certificate inventory; enables automated renewal orchestration; eliminates institutional-knowledge dependency.
+
+### Functional Design
+
+**Functional Flow (Step-by-Step):**
+
+1. REGENT picks up a renewal work item from Service Bus `cert.renewal.required`.
+2. REGENT calls `read_cert_inventory` to retrieve the existing inventory record for this certificate.
+3. Claude enriches the work item: adds owner, CA type, CA contact details, renewal SLA, affected environments.
+4. REGENT calls `update_cert_inventory` to record the renewal event in the inventory.
+5. REGENT publishes the enriched renewal record to Service Bus `cert.renewal.enriched` for COURIER.
+
+**Inputs / Outputs:**
+
+| | Detail |
+|---|---|
+| Input | Renewal work item from TIMELINE (cert name, expiry date, urgency) |
+| Output | Enriched renewal record (+ owner, CA, environments, SLA) published to COURIER |
+| Output Format | Service Bus message to COURIER; Azure Table Storage inventory update |
+
+**Trigger Type:** Event-based (Service Bus `cert.renewal.required`)
+
+### Architecture (MANDATORY)
+
+**Conceptual Diagram:**
+```
+TIMELINE --> Service Bus: cert.renewal.required
+    |
+    v
+REGENT (Azure Function)
+    +-- Tool: read_cert_inventory --> Azure Table Storage
+    +-- AI: Enrich with owner, CA, environments
+    +-- Tool: update_cert_inventory --> Azure Table Storage
+    +-- Publish: cert.renewal.enriched --> Service Bus --> COURIER
+```
+
+**HLD:** See Diagrams/HLD/REGENT_HLD.png
+
+**LLD:** See Diagrams/LLD/REGENT_LLD.png (must be completed before Production)
+
+### AI / Agent Configuration
+
+**Model:** claude-sonnet-4-6 (Anthropic API)
+
+**System Prompt Summary:**
+"You are REGENT, a certificate inventory manager. When you receive a renewal work item, look up the certificate in the inventory and enrich it with: owner name, owner contact, CA type (internal C&M portal / external DigiCert), CA contact details, affected environments (Dev/QA/Prod), renewal SLA (days), and last renewal date. Update the inventory record to reflect that renewal is in progress. Produce an enriched renewal record for COURIER."
+
+**Tools / API Specifications:**
+
+| Tool | API | Description |
+|---|---|---|
+| `read_cert_inventory` | Azure Table Storage SDK | Reads certificate inventory record |
+| `update_cert_inventory` | Azure Table Storage SDK | Updates inventory with renewal status |
+| `publish_to_service_bus` | Azure Service Bus SDK | Publishes enriched record to COURIER |
+
+### Engineering & Access
+
+| Field | Value |
+|---|---|
+| Repo Link | poc/agents/ (BlueLine monorepo) |
+| Environment Mapping | Dev -> QA -> Prod |
+| Credentials Required | Anthropic API key, Azure Table Storage connection string, Azure Service Bus connection string |
+
+### Operations & Visibility
+
+- **Monitoring & Logging:** Application Insights — inventory reads/writes, enrichment success rate, records updated per day.
+- **Support / Runbook:** If a certificate is not found in the inventory, REGENT logs a warning and alerts the Operations team to add the certificate manually. Never block the renewal pipeline on a missing inventory record.
+- **Catalogue:** Register under "Certificate Loop > REGENT."
+
+### Knowledge & Training
+
+- **Demo Recordings:** To be added.
+- **KT / KM Session Links:** To be scheduled.
+
+### Lifecycle Operations
+
+- **Pause / Restart:** Disable Service Bus subscription. Work items queue safely; resume when re-enabled.
+- **Intern ID Deactivation:** Rotate Table Storage access keys (prefer Managed Identity).
+
+### For Completed Agents
+
+> **Status: In Design.**
+
+---
+
+## Agent 11: COURIER
+
+### Core Definition
+
+| Field | Value |
+|---|---|
+| Agent Name | COURIER |
+| Agent ID | BL-CERT-003 |
+| Project Mapping | Project BlueLine — Certificate Loop Track |
+| Status Lifecycle | Design -> Development |
+| Trigger Type | Event-based (REGENT Service Bus output) |
+| Human Gate | No |
+
+### Problem & Purpose (MANDATORY)
+
+**Agent-Level Problem Statement:**
+Requesting and downloading renewed SSL/TLS certificates from Certificate Authorities (internal C&M portal or external DigiCert) is a fully manual process. Engineers must navigate CA portals, fill in request forms, wait for issuance, and download certificates — a process that can take days and is prone to human error.
+
+**Executive Summary:**
+COURIER receives an enriched renewal record from REGENT and automates the certificate issuance process: it calls the appropriate CA API (internal or DigiCert), submits the renewal request, polls for issuance completion, downloads the new certificate file, validates it, and stores it in Azure Key Vault — ready for HARBOUR to deploy.
+
+**Business Value:** Eliminates manual CA portal interactions; accelerates issuance from days to hours; produces a validated, ready-to-deploy certificate package.
+
+### Functional Design
+
+**Functional Flow (Step-by-Step):**
+
+1. COURIER picks up enriched renewal record from Service Bus `cert.renewal.enriched`.
+2. COURIER determines CA type: internal (C&M portal API) or external (DigiCert API).
+3. Claude calls `submit_certificate_request` with the appropriate CA API and parameters.
+4. COURIER polls `check_certificate_status` until issuance is confirmed (with configurable timeout).
+5. COURIER calls `download_certificate` to retrieve the certificate file (PEM/PFX).
+6. COURIER validates the downloaded certificate: subject, SAN, expiry, chain.
+7. COURIER stores the validated certificate in Azure Key Vault via `store_certificate_in_keyvault`.
+8. COURIER publishes to Service Bus `cert.renewal.ready` for HARBOUR to deploy.
+
+**Inputs / Outputs:**
+
+| | Detail |
+|---|---|
+| Input | Enriched renewal record from REGENT (cert name, CA type, CA contact, environments, expiry) |
+| Output | Validated certificate file stored in Azure Key Vault; deployment message to HARBOUR |
+| Output Format | Azure Key Vault certificate + Service Bus message |
+
+**Trigger Type:** Event-based (Service Bus `cert.renewal.enriched`)
+
+### Architecture (MANDATORY)
+
+**Conceptual Diagram:**
+```
+REGENT --> Service Bus: cert.renewal.enriched
+    |
+    v
+COURIER (Azure Function)
+    +-- Tool: submit_certificate_request --> CA API (C&M or DigiCert)
+    +-- Tool: check_certificate_status --> CA API (polling)
+    +-- Tool: download_certificate --> CA API
+    +-- Tool: validate_certificate --> local validation
+    +-- Tool: store_certificate_in_keyvault --> Azure Key Vault API
+    +-- Publish: cert.renewal.ready --> Service Bus --> HARBOUR
+```
+
+**HLD:** See Diagrams/HLD/COURIER_HLD.png
+
+**LLD:** See Diagrams/LLD/COURIER_LLD.png (must be completed before Production)
+
+### AI / Agent Configuration
+
+**Model:** claude-sonnet-4-6 (Anthropic API)
+
+**System Prompt Summary:**
+"You are COURIER, a certificate issuance orchestrator. Submit renewal requests to the correct CA (internal C&M portal or external DigiCert). Poll for issuance. Download the certificate. Validate it: confirm subject matches, SAN is correct, expiry is in the future, chain is complete and trusted. Store in Key Vault. If validation fails, do not proceed to HARBOUR — log the failure and alert the Operations team."
+
+**Tools / API Specifications:**
+
+| Tool | API | Description |
+|---|---|---|
+| `submit_certificate_request` | Internal C&M API / DigiCert REST API | Submits renewal request to CA |
+| `check_certificate_status` | Internal C&M API / DigiCert REST API | Polls for issuance completion |
+| `download_certificate` | Internal C&M API / DigiCert REST API | Downloads certificate file (PEM/PFX) |
+| `validate_certificate` | Local (cryptography library) | Validates subject, SAN, expiry, chain |
+| `store_certificate_in_keyvault` | Azure Key Vault SDK | Stores validated cert in Key Vault |
+| `publish_to_service_bus` | Azure Service Bus SDK | Notifies HARBOUR |
+
+### Engineering & Access
+
+| Field | Value |
+|---|---|
+| Repo Link | poc/agents/ (BlueLine monorepo) |
+| Environment Mapping | Dev -> QA -> Prod |
+| Credentials Required | Anthropic API key, CA API credentials (C&M + DigiCert), Azure Key Vault access, Azure Service Bus connection |
+
+### Operations & Visibility
+
+- **Monitoring & Logging:** Application Insights — request submission count, issuance latency, validation pass/fail rate, Key Vault write success.
+- **Support / Runbook:** If CA API is unavailable, COURIER retries with exponential backoff (3 attempts over 24 hours). Alert Operations team on third failure.
+- **Catalogue:** Register under "Certificate Loop > COURIER."
+
+### Knowledge & Training
+
+- **Demo Recordings:** To be added.
+- **KT / KM Session Links:** To be scheduled with InfoSec and Operations team.
+
+### Lifecycle Operations
+
+- **Pause / Restart:** Disable Service Bus subscription. REGENT messages accumulate safely. On resume, certificates in the queue will be processed immediately.
+- **Intern ID Deactivation:** Revoke CA API credentials for intern accounts; rotate shared credentials.
+
+### For Completed Agents
+
+> **Status: In Design.**
+
+---
+
+## Agent 12: HARBOUR
+
+### Core Definition
+
+| Field | Value |
+|---|---|
+| Agent Name | HARBOUR |
+| Agent ID | BL-CERT-004 |
+| Project Mapping | Project BlueLine — Certificate Loop Track |
+| Status Lifecycle | Design -> Development |
+| Trigger Type | Event-based (COURIER Service Bus output) |
+| Human Gate | Yes — Production deployment requires explicit human approval via Teams/Email |
+
+### Problem & Purpose (MANDATORY)
+
+**Agent-Level Problem Statement:**
+Deploying renewed SSL/TLS certificates to servers and application services is a multi-step manual process repeated across Dev, QA, and Production environments. Engineers must download certificates, copy them to each server, import into IIS, bind to websites, and verify HTTPS — with the entire sequence repeated per environment.
+
+**Executive Summary:**
+HARBOUR receives a validated certificate from COURIER and automates the full deployment sequence across all environments: Dev and QA are deployed automatically; Production requires human approval via Teams notification. For each deployment, HARBOUR installs the certificate in IIS (via WinRM/PowerShell) or Azure App Service (via Azure SDK), binds it to the appropriate websites/APIs, and verifies HTTPS is working correctly post-deployment.
+
+**Business Value:** Eliminates the most error-prone and time-consuming step in the certificate lifecycle; ensures consistent deployment across all environments; provides automated HTTPS verification; maintains production control via human gate.
+
+### Functional Design
+
+**Functional Flow (Step-by-Step):**
+
+1. HARBOUR picks up ready certificate from Service Bus `cert.renewal.ready`.
+2. HARBOUR deploys to Dev environment: calls `deploy_to_iis` or `deploy_to_app_service`, then `verify_https`.
+3. On Dev success, HARBOUR deploys to QA using the same sequence.
+4. On QA success, HARBOUR sends a Teams/Email notification requesting Production approval.
+5. Human engineer approves (clicks approve link in Teams or replies to email).
+6. On approval received, HARBOUR deploys to Production.
+7. HARBOUR calls `verify_https` on Production — confirms HTTPS working.
+8. HARBOUR updates Key Vault certificate metadata (renewal date, deployed environments).
+9. HARBOUR publishes completion event to STEWARD for audit logging.
+
+**Inputs / Outputs:**
+
+| | Detail |
+|---|---|
+| Input | Validated certificate from Key Vault (via COURIER); environment list; binding configuration |
+| Output | Deployed certificate across Dev/QA/Prod; HTTPS verification result; audit log event |
+| Output Format | IIS certificate store / Azure App Service binding; HTTPS verification status |
+
+**Trigger Type:** Event-based (Service Bus `cert.renewal.ready`)
+
+### Architecture (MANDATORY)
+
+**Conceptual Diagram:**
+```
+COURIER --> Service Bus: cert.renewal.ready
+    |
+    v
+HARBOUR (Azure Function)
+    +-- Deploy to DEV:
+    |   +-- Tool: deploy_to_iis (WinRM/PS) or deploy_to_app_service (Azure SDK)
+    |   +-- Tool: verify_https --> HTTP check on dev site
+    +-- Deploy to QA (on Dev success):
+    |   +-- Tool: deploy_to_iis / deploy_to_app_service
+    |   +-- Tool: verify_https --> HTTP check on QA site
+    +-- Send Teams/Email approval request for PROD (human gate)
+    +-- On approval --> Deploy to PROD:
+    |   +-- Tool: deploy_to_iis / deploy_to_app_service
+    |   +-- Tool: verify_https --> HTTP check on Prod site
+    +-- Update Key Vault metadata --> STEWARD audit log
+```
+
+**HLD:** See Diagrams/HLD/HARBOUR_HLD.png
+
+**LLD:** See Diagrams/LLD/HARBOUR_LLD.png (must be completed before Production)
+
+### AI / Agent Configuration
+
+**Model:** claude-sonnet-4-6 (Anthropic API)
+
+**System Prompt Summary:**
+"You are HARBOUR, a certificate deployment and validation agent. Deploy the provided certificate to each environment in sequence: Dev -> QA -> Prod. For Dev and QA: deploy automatically. For Prod: request human approval first and only proceed on confirmation. After each deployment, verify HTTPS is working. If verification fails, roll back the certificate to the previous version and alert the Operations team immediately. Never proceed to the next environment if the current one fails verification."
+
+**Tools / API Specifications:**
+
+| Tool | API | Description |
+|---|---|---|
+| `deploy_to_iis` | WinRM / PowerShell Remoting | Imports cert into IIS and binds to site/API |
+| `deploy_to_app_service` | Azure App Service SDK | Binds certificate to App Service custom domain |
+| `verify_https` | HTTPS check (requests library) | Confirms site returns HTTP 200 with new certificate |
+| `send_approval_request` | Microsoft Teams Webhook / Email API | Sends Prod approval notification to Operations team |
+| `update_keyvault_metadata` | Azure Key Vault SDK | Updates renewal date and deployment status |
+| `publish_to_service_bus` | Azure Service Bus SDK | Notifies STEWARD of completion |
+
+### Engineering & Access
+
+| Field | Value |
+|---|---|
+| Repo Link | poc/agents/ (BlueLine monorepo) |
+| Environment Mapping | Dev -> QA -> Prod |
+| Credentials Required | Anthropic API key, WinRM credentials (IIS servers), Azure App Service credentials (Managed Identity preferred), Teams webhook URL, Azure Key Vault access, Azure Service Bus connection |
+
+### Operations & Visibility
+
+- **Monitoring & Logging:** Application Insights — deployment success/failure per environment, HTTPS verification pass/fail, rollback events, approval wait time.
+- **Support / Runbook:** If HTTPS verification fails post-deployment: (1) HARBOUR auto-rolls back to previous certificate; (2) Operations team is alerted; (3) Manual investigation required before retry. If WinRM connection fails: check server connectivity and firewall rules.
+- **Catalogue:** Register under "Certificate Loop > HARBOUR."
+
+### Knowledge & Training
+
+- **Demo Recordings:** To be added after first end-to-end certificate renewal demo.
+- **KT / KM Session Links:** To be scheduled with Operations and InfoSec teams.
+
+### Lifecycle Operations
+
+- **Pause / Restart:** Disable Service Bus subscription. Ready certificates queue safely. On resume, deployments proceed from the queued messages. If a certificate has expired by resume time, escalate to Operations for manual handling.
+- **Intern ID Deactivation:** Revoke WinRM credentials and App Service principal access for intern accounts; rotate shared credentials immediately.
+
+### For Completed Agents
+
+> **Status: In Design.**
+
+---
+
+## Standard Documentation Folder Structure (MANDATORY)
+
+```
+Project/
++-- Project_Documentation.docx     (Word document)
++-- Project_Documentation.md       (Markdown version)
+|
++-- Agents/
+    +-- CLARION_Documentation.md
+    +-- LUMEN_Documentation.md
+    +-- VECTOR_Documentation.md
+    +-- ASCENT_Documentation.md
+    +-- BULWARK_Documentation.md
+    +-- WATCHTOWER_Documentation.md
+    +-- FORGE_Documentation.md
+    +-- STEWARD_Documentation.md
+    +-- TIMELINE_Documentation.md
+    +-- REGENT_Documentation.md
+    +-- COURIER_Documentation.md
+    +-- HARBOUR_Documentation.md
+    |
+    +-- Diagrams/
+        +-- HLD/
+        |   +-- CLARION_HLD.png
+        |   +-- LUMEN_HLD.png
+        |   +-- VECTOR_HLD.png
+        |   +-- ASCENT_HLD.png
+        |   +-- BULWARK_HLD.png
+        |   +-- WATCHTOWER_HLD.png
+        |   +-- FORGE_HLD.png
+        |   +-- STEWARD_HLD.png
+        |   +-- TIMELINE_HLD.png
+        |   +-- REGENT_HLD.png
+        |   +-- COURIER_HLD.png
+        |   +-- HARBOUR_HLD.png
+        |
+        +-- LLD/
+        |   +-- CLARION_LLD.png
+        |   +-- LUMEN_LLD.png
+        |   +-- VECTOR_LLD.png
+        |   +-- ASCENT_LLD.png
+        |   +-- BULWARK_LLD.png
+        |   +-- WATCHTOWER_LLD.png
+        |   +-- FORGE_LLD.png
+        |   +-- STEWARD_LLD.png
+        |   +-- TIMELINE_LLD.png
+        |   +-- REGENT_LLD.png
+        |   +-- COURIER_LLD.png
+        |   +-- HARBOUR_LLD.png
+        |
+        +-- Conceptual/
+        |   +-- BlueLine_Conceptual_Architecture.png
+        |
+        +-- Recordings/
+            +-- (demo recordings to be added)
+```
+
+---
+
+*Project BlueLine — Project Documentation v1.0 | 2026-05-26*
